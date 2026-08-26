@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useMemo, useState } from "react";
 import {
   ArrowRight,
@@ -14,67 +14,60 @@ import {
   Info,
   Link2,
   LoaderCircle,
+  MessageSquareText,
   ScanSearch,
   Sparkles,
   UserRound,
 } from "lucide-react";
-import { demoScenarios, mockDatabase } from "@/data/mock-data";
-import { CLAIM_TYPE_META, inferDemoScenario } from "@/lib/stocktrace";
-import type { DemoScenario, DemoScenarioId } from "@/types/stocktrace";
-
-function getScenarioPresentation(scenario: DemoScenario) {
-  const analysis = mockDatabase.analyses.find((item) => item.id === scenario.analysisId);
-  const seededStatement = analysis
-    ? mockDatabase.statements.find((item) => item.id === analysis.statementIds[0])
-    : undefined;
-  const stocks = seededStatement?.stockIds
-    .map((stockId) => mockDatabase.stocks.find((stock) => stock.id === stockId))
-    .filter((stock) => stock !== undefined) ?? [];
-  const prediction = analysis?.relatedPredictionId
-    ? mockDatabase.predictions.find((item) => item.id === analysis.relatedPredictionId)
-    : undefined;
-  const isFactCheck = Boolean(scenario.links.factCheckHref);
-  const primaryHref = scenario.links.factCheckHref ?? scenario.links.predictionHref ?? scenario.links.receiptHref ?? "/analyze";
-
-  return {
-    type: seededStatement ? CLAIM_TYPE_META[seededStatement.primaryType].label : "발언 유형 확인 필요",
-    company: stocks.length > 0 ? stocks.map((stock) => `${stock.name} · ${stock.symbol}`).join(", ") : "종목 확인 필요",
-    summary: analysis?.summary ?? scenario.description,
-    confidence: seededStatement?.confidence.score ?? 70,
-    condition: isFactCheck
-      ? "팩트체크 가능"
-      : prediction?.status === "insufficient_conditions"
-        ? "평가조건 불충분"
-        : "평가조건 충족",
-    href: primaryHref,
-    receiptHref: scenario.links.receiptHref,
-    cta: isFactCheck
-      ? "팩트체크 결과 보기"
-      : prediction?.status === "insufficient_conditions"
-        ? "조건 불충분 기록 보기"
-        : "예측 추적 기록 보기",
-    icon: isFactCheck ? FileCheck2 : prediction?.status === "insufficient_conditions" ? Info : BarChart3,
-  };
-}
+import { AnalysisInputSummary } from "@/components/analysis-input-summary";
+import { demoScenarios } from "@/data/mock-data";
+import {
+  analyzeContentWithMock,
+  analyzeStatementsWithMock,
+  appendAnalysisInput,
+  readAnalysisInput,
+  type ContentAnalysisInput,
+  type MockAnalyzedStatement,
+} from "@/lib/mock-analysis";
+import { CLAIM_TYPE_META } from "@/lib/stocktrace";
 
 export function AnalysisWorkspace() {
+  const router = useRouter();
   const searchParams = useSearchParams();
-  const initialUrl = searchParams.get("url") ?? "";
+  const restoredInput = useMemo(
+    () => readAnalysisInput((key) => searchParams.get(key)),
+    [searchParams],
+  );
+  const initialUrl = restoredInput?.contentUrl ?? searchParams.get("url") ?? "";
   const [url, setUrl] = useState(initialUrl);
-  const [influencer, setInfluencer] = useState("");
-  const [statement, setStatement] = useState("");
+  const [influencer, setInfluencer] = useState(restoredInput?.influencerName ?? "");
+  const [statement, setStatement] = useState(restoredInput?.statement ?? "");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState<DemoScenarioId | null>(null);
-
-  const resultScenario = useMemo(
-    () => (result ? demoScenarios.find((scenario) => scenario.id === result) ?? null : null),
-    [result],
+  const [results, setResults] = useState<MockAnalyzedStatement[]>(() => {
+    if (!restoredInput) return [];
+    const restoredResults = analyzeStatementsWithMock(restoredInput.statement);
+    return restoredResults.length > 1 || restoredResults[0]?.analysis.kind === "opinion"
+      ? restoredResults
+      : [];
+  });
+  const [analyzedInput, setAnalyzedInput] = useState<ContentAnalysisInput | null>(() => {
+    if (!restoredInput) return null;
+    const restoredResults = analyzeStatementsWithMock(restoredInput.statement);
+    return restoredResults.length > 1 || restoredResults[0]?.analysis.kind === "opinion"
+      ? restoredInput
+      : null;
+  });
+  const submittedInput = useMemo<ContentAnalysisInput>(
+    () => ({
+      contentUrl: url.trim(),
+      influencerName: influencer.trim(),
+      statement: statement.trim(),
+    }),
+    [influencer, statement, url],
   );
-  const resultMeta = useMemo(
-    () => (resultScenario ? getScenarioPresentation(resultScenario) : null),
-    [resultScenario],
-  );
+  const result = results.length === 1 ? results[0].analysis : null;
+  const resultInput = analyzedInput ?? submittedInput;
 
   function applySample(index: number) {
     const sample = demoScenarios[index];
@@ -82,10 +75,11 @@ export function AnalysisWorkspace() {
     setInfluencer(sample.input.influencerName);
     setStatement(sample.input.statement);
     setError("");
-    setResult(null);
+    setResults([]);
+    setAnalyzedInput(null);
   }
 
-  function submit(event: React.FormEvent<HTMLFormElement>) {
+  async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!url.trim() || !influencer.trim() || !statement.trim()) {
       setError("콘텐츠 URL, 인플루언서 이름, 분석할 발언을 모두 입력해 주세요.");
@@ -101,14 +95,34 @@ export function AnalysisWorkspace() {
 
     setError("");
     setLoading(true);
-    setResult(null);
-    window.setTimeout(() => {
-      setResult(inferDemoScenario(statement).id);
+    setResults([]);
+    setAnalyzedInput(null);
+    await new Promise((resolve) => window.setTimeout(resolve, 650));
+
+    try {
+      const analysis = await analyzeContentWithMock(submittedInput);
+      const extractedStatements = analysis.statements;
+      const onlyStatement = extractedStatements.length === 1 ? extractedStatements[0] : null;
+
+      if (onlyStatement?.analysis.destinationHref) {
+        const selectedInput = { ...submittedInput, statement: onlyStatement.statement };
+        router.push(
+          appendAnalysisInput(onlyStatement.analysis.destinationHref, selectedInput),
+        );
+        return;
+      }
+
+      setResults(extractedStatements);
+      setAnalyzedInput(submittedInput);
       setLoading(false);
+      router.replace(appendAnalysisInput("/analyze", submittedInput), { scroll: false });
       window.requestAnimationFrame(() => {
         document.getElementById("analysis-result")?.scrollIntoView({ behavior: "smooth", block: "start" });
       });
-    }, 850);
+    } catch {
+      setLoading(false);
+      setError("데모 분석 중 문제가 발생했습니다. 잠시 후 다시 시도해 주세요.");
+    }
   }
 
   return (
@@ -273,7 +287,136 @@ export function AnalysisWorkspace() {
           </div>
         )}
 
-        {resultMeta && !loading && (
+        {results.length > 1 && !loading && (
+          <section className="surface-card animate-enter overflow-hidden" aria-labelledby="multi-result-title">
+            <div className="flex flex-col gap-4 border-b border-line bg-[#f8fbfa] px-5 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-7">
+              <div className="flex items-center gap-3">
+                <span className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-emerald-100 text-emerald-700">
+                  <Check aria-hidden="true" className="size-5" strokeWidth={2.6} />
+                </span>
+                <div>
+                  <p className="text-xs font-bold text-emerald-700">데모 분석 완료</p>
+                  <h2 id="multi-result-title" className="mt-0.5 text-xl font-black tracking-[-0.02em] text-ink">
+                    추출된 핵심 발언 {results.length}개
+                  </h2>
+                </div>
+              </div>
+              <span className="inline-flex w-fit items-center gap-1.5 rounded-full border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-bold text-blue-700">
+                <Sparkles aria-hidden="true" className="size-3.5" />
+                문장 단위 mock 분석
+              </span>
+            </div>
+
+            <div className="p-5 sm:p-7">
+              <AnalysisInputSummary input={resultInput} />
+
+              <ol className="mt-5 space-y-4">
+                {results.map(({ id, statement: extractedStatement, analysis }, index) => {
+                  const selectedInput = { ...resultInput, statement: extractedStatement };
+                  const isFact = analysis.kind === "fact";
+                  const isPrediction =
+                    analysis.kind === "prediction" || analysis.kind === "insufficient_prediction";
+
+                  return (
+                    <li key={id} className="rounded-2xl border border-line bg-white p-5 sm:p-6">
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="text-xs font-extrabold text-muted">핵심 발언 {index + 1}</span>
+                          <span className="inline-flex items-center gap-1.5 rounded-full border border-[#c9dddd] bg-[#f1f8f7] px-2.5 py-1 text-xs font-bold text-brand">
+                            {isFact ? (
+                              <FileCheck2 aria-hidden="true" className="size-3.5" />
+                            ) : isPrediction ? (
+                              <BarChart3 aria-hidden="true" className="size-3.5" />
+                            ) : (
+                              <MessageSquareText aria-hidden="true" className="size-3.5" />
+                            )}
+                            {analysis.label}
+                          </span>
+                        </div>
+                        <span className="text-xs font-semibold text-muted">
+                          분류 신뢰수준 {analysis.confidence}%
+                        </span>
+                      </div>
+
+                      <blockquote className="mt-4 text-base font-extrabold leading-7 tracking-[-0.01em] text-ink">
+                        “{extractedStatement}”
+                      </blockquote>
+
+                      <div className="mt-4 grid gap-2.5 sm:grid-cols-3">
+                        {[
+                          ["발언 유형", analysis.label],
+                          ["언급 종목", analysis.detectedEntity],
+                          ["기록 판단", analysis.conditionLabel],
+                        ].map(([label, value]) => (
+                          <div key={label} className="rounded-xl bg-slate-50 px-3.5 py-3">
+                            <p className="text-[11px] font-semibold text-muted">{label}</p>
+                            <p className="mt-1 text-sm font-extrabold leading-5 text-ink">{value}</p>
+                          </div>
+                        ))}
+                      </div>
+
+                      {analysis.predictionDetails && (
+                        <dl className="mt-3 grid gap-2.5 sm:grid-cols-3">
+                          <div className="rounded-xl border border-blue-100 bg-blue-50/70 px-3.5 py-3">
+                            <dt className="text-[11px] font-semibold text-slate-600">방향</dt>
+                            <dd className="mt-1 text-sm font-extrabold text-ink">
+                              {analysis.predictionDetails.directionLabel}
+                            </dd>
+                          </div>
+                          <div className="rounded-xl border border-blue-100 bg-blue-50/70 px-3.5 py-3">
+                            <dt className="text-[11px] font-semibold text-slate-600">목표 수익률</dt>
+                            <dd className="mt-1 text-sm font-extrabold text-ink">
+                              {analysis.predictionDetails.targetReturnLabel ?? "조건 없음"}
+                            </dd>
+                          </div>
+                          <div className="rounded-xl border border-blue-100 bg-blue-50/70 px-3.5 py-3">
+                            <dt className="text-[11px] font-semibold text-slate-600">기간</dt>
+                            <dd className="mt-1 text-sm font-extrabold text-ink">
+                              {analysis.predictionDetails.periodLabel ?? "조건 없음"}
+                            </dd>
+                          </div>
+                        </dl>
+                      )}
+
+                      <div className="mt-4 flex items-start gap-2.5 rounded-xl bg-[#edf7f5] px-4 py-3.5">
+                        <BadgeCheck aria-hidden="true" className="mt-0.5 size-4.5 shrink-0 text-emerald-700" />
+                        <p className="text-sm leading-6 text-slate-700">{analysis.description}</p>
+                      </div>
+
+                      <div className="mt-4">
+                        {analysis.destinationHref ? (
+                          <Link
+                            href={appendAnalysisInput(analysis.destinationHref, selectedInput)}
+                            className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-ink px-4 text-sm font-extrabold text-white transition hover:bg-[#1c4053] sm:w-fit sm:min-w-64"
+                          >
+                            {isFact ? (
+                              <FileCheck2 aria-hidden="true" className="size-4.5" />
+                            ) : (
+                              <BarChart3 aria-hidden="true" className="size-4.5" />
+                            )}
+                            {analysis.destinationLabel}
+                            <ArrowRight aria-hidden="true" className="size-4" />
+                          </Link>
+                        ) : (
+                          <span className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-line bg-slate-50 px-4 text-sm font-bold text-muted">
+                            <MessageSquareText aria-hidden="true" className="size-4" />
+                            개인 의견으로 분류됨
+                          </span>
+                        )}
+                      </div>
+                    </li>
+                  );
+                })}
+              </ol>
+
+              <p className="mt-4 text-xs leading-5 text-muted">
+                문장 분리와 분류는 준비된 키워드 규칙을 사용합니다. 카드를 선택하면 해당 발언 한 개만 기존 결과 화면에 반영됩니다.
+              </p>
+            </div>
+          </section>
+        )}
+
+        {result && results.length === 1 && !loading && (
           <section className="surface-card animate-enter overflow-hidden" aria-labelledby="result-title">
             <div className="flex flex-col gap-4 border-b border-line bg-[#f8fbfa] px-5 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-7">
               <div className="flex items-center gap-3">
@@ -289,21 +432,18 @@ export function AnalysisWorkspace() {
               </div>
               <span className="inline-flex w-fit items-center gap-1.5 rounded-full border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-bold text-blue-700">
                 <Sparkles aria-hidden="true" className="size-3.5" />
-                AI 분류 신뢰수준 {resultMeta.confidence}%
+                AI 분류 신뢰수준 {result.confidence}%
               </span>
             </div>
 
             <div className="p-5 sm:p-7">
-              <blockquote className="rounded-2xl border-l-4 border-brand bg-slate-50 px-5 py-4 text-[15px] font-semibold leading-7 text-ink">
-                “{statement.trim()}”
-                <footer className="mt-2 text-xs font-medium text-muted">— {influencer.trim()}</footer>
-              </blockquote>
+              <AnalysisInputSummary input={resultInput} />
 
               <div className="mt-5 grid gap-3 sm:grid-cols-3">
                 {[
-                  ["발언 유형", resultMeta.type],
-                  ["언급 종목", resultMeta.company],
-                  ["기록 판단", resultMeta.condition],
+                  ["발언 유형", result.label],
+                  ["언급 종목", result.detectedEntity],
+                  ["기록 판단", result.conditionLabel],
                 ].map(([label, value]) => (
                   <div key={label} className="rounded-xl border border-line bg-white p-4">
                     <p className="text-xs font-semibold text-muted">{label}</p>
@@ -314,21 +454,35 @@ export function AnalysisWorkspace() {
 
               <div className="mt-5 flex items-start gap-3 rounded-xl bg-[#edf7f5] px-4 py-4">
                 <BadgeCheck aria-hidden="true" className="mt-0.5 size-5 shrink-0 text-emerald-700" />
-                <p className="text-sm leading-6 text-slate-700">{resultMeta.summary}</p>
+                <p className="text-sm leading-6 text-slate-700">{result.description}</p>
               </div>
 
               <div className="mt-6 grid gap-3 sm:grid-cols-3">
-                <Link
-                  href={resultMeta.href}
-                  className="flex min-h-13 items-center justify-center gap-2 rounded-xl bg-ink px-4 text-sm font-extrabold text-white transition hover:bg-[#1c4053] sm:col-span-2"
-                >
-                  <resultMeta.icon aria-hidden="true" className="size-4.5" />
-                  {resultMeta.cta}
-                  <ArrowRight aria-hidden="true" className="size-4" />
-                </Link>
-                {resultMeta.receiptHref ? (
+                {result.destinationHref ? (
                   <Link
-                    href={resultMeta.receiptHref}
+                    href={appendAnalysisInput(result.destinationHref, resultInput)}
+                    className="flex min-h-13 items-center justify-center gap-2 rounded-xl bg-ink px-4 text-sm font-extrabold text-white transition hover:bg-[#1c4053] sm:col-span-2"
+                  >
+                    {result.kind === "fact" ? (
+                      <FileCheck2 aria-hidden="true" className="size-4.5" />
+                    ) : (
+                      <BarChart3 aria-hidden="true" className="size-4.5" />
+                    )}
+                    {result.destinationLabel}
+                    <ArrowRight aria-hidden="true" className="size-4" />
+                  </Link>
+                ) : (
+                  <a
+                    href="#analysis-form-title"
+                    className="flex min-h-13 items-center justify-center gap-2 rounded-xl bg-ink px-4 text-sm font-extrabold text-white transition hover:bg-[#1c4053] sm:col-span-2"
+                  >
+                    <ScanSearch aria-hidden="true" className="size-4.5" />
+                    다른 발언 분석하기
+                  </a>
+                )}
+                {result.receiptHref ? (
+                  <Link
+                    href={appendAnalysisInput(result.receiptHref, resultInput)}
                     className="flex min-h-13 items-center justify-center gap-2 rounded-xl border border-line bg-white px-4 text-sm font-extrabold text-ink transition hover:bg-slate-50"
                   >
                     <FileText aria-hidden="true" className="size-4" />
@@ -343,7 +497,7 @@ export function AnalysisWorkspace() {
               </div>
 
               <p className="mt-4 text-xs leading-5 text-muted">
-                상세 화면은 입력 내용과 별개로 준비된 예시 공시·주가 데이터를 사용합니다. 신뢰수준은 분류 결과에 대한 값이며 발언의 진실 확률이 아닙니다.
+                상세 근거와 주가 수치는 준비된 예시 데이터를 사용합니다. 신뢰수준은 분류 결과에 대한 값이며 발언의 진실 확률이 아닙니다.
               </p>
             </div>
           </section>

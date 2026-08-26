@@ -17,9 +17,15 @@ import {
   Target,
   UserRound,
 } from "lucide-react";
+import { AnalysisInputSummary } from "@/components/analysis-input-summary";
 import { PredictionCard } from "@/components/prediction-card";
 import { DemoNotice } from "@/components/ui/demo-notice";
 import { predictions } from "@/data/mock-data";
+import {
+  appendAnalysisInput,
+  readAnalysisInputFromRecord,
+  type AnalysisSearchParams,
+} from "@/lib/mock-analysis";
 import {
   formatKoreanDate,
   formatMoney,
@@ -28,7 +34,10 @@ import {
   getPredictionView,
 } from "@/lib/stocktrace";
 
-type PageProps = { params: Promise<{ id: string }> };
+type PageProps = {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<AnalysisSearchParams>;
+};
 
 export function generateStaticParams() {
   return predictions.map(({ id }) => ({ id }));
@@ -43,12 +52,15 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   };
 }
 
-export default async function PredictionDetailPage({ params }: PageProps) {
-  const { id } = await params;
+export default async function PredictionDetailPage({ params, searchParams }: PageProps) {
+  const [{ id }, query] = await Promise.all([params, searchParams]);
   const view = getPredictionView(id);
   if (!view) notFound();
 
   const { prediction, statement, influencer, stock, receipt } = view;
+  const analysisInput = readAnalysisInputFromRecord(query);
+  const preserveAnalysisInput = (href: string) =>
+    analysisInput ? appendAnalysisInput(href, analysisInput) : href;
   const evaluation = prediction.evaluation;
   const cardEvaluation = evaluation && evaluation.targetReached !== null
     ? { ...evaluation, evaluatedAt: formatKoreanDate(evaluation.evaluatedAt), targetReached: evaluation.targetReached }
@@ -80,19 +92,20 @@ export default async function PredictionDetailPage({ params }: PageProps) {
           <h1 className="mt-2 balance-text text-3xl font-black tracking-[-0.04em] text-ink sm:text-4xl">예측 추적 상세</h1>
           <p className="mt-3 text-sm leading-6 text-muted">발언 시점부터 평가일까지, 미리 기록한 조건으로 결과를 확인합니다.</p>
         </div>
-        <Link href="/predictions" className="inline-flex min-h-11 w-fit items-center gap-2 rounded-xl border border-line bg-white px-4 text-sm font-extrabold text-ink hover:bg-slate-50">
+        <Link href={preserveAnalysisInput(`/predictions?focus=${prediction.id}`)} className="inline-flex min-h-11 w-fit items-center gap-2 rounded-xl border border-line bg-white px-4 text-sm font-extrabold text-ink hover:bg-slate-50">
           <ArrowLeft aria-hidden="true" className="size-4" /> 전체 목록
         </Link>
       </div>
 
       <DemoNotice compact className="mb-6" />
+      {analysisInput && <AnalysisInputSummary input={analysisInput} className="mb-6" />}
 
       <PredictionCard
         href="#evaluation-detail"
-        influencerName={influencer.displayName}
+        influencerName={analysisInput?.influencerName ?? influencer.displayName}
         stockName={stock.name}
         stockSymbol={`${stock.market} · ${stock.symbol}`}
-        originalText={statement.text}
+        originalText={analysisInput?.statement ?? statement.text}
         prediction={{
           id: prediction.id,
           statedAt: formatKoreanDate(prediction.statedAt),
@@ -217,7 +230,7 @@ export default async function PredictionDetailPage({ params }: PageProps) {
 
       <section className="mt-7 grid gap-3 sm:grid-cols-2" aria-label="연결된 기록">
         {receipt && (
-          <Link href={`/receipts/${receipt.id}`} className="surface-card group flex min-h-20 items-center justify-between gap-4 p-4 sm:p-5">
+          <Link href={preserveAnalysisInput(`/receipts/${receipt.id}`)} className="surface-card group flex min-h-20 items-center justify-between gap-4 p-4 sm:p-5">
             <span className="flex items-center gap-3">
               <span className="flex size-10 items-center justify-center rounded-xl bg-[#e8f2f2] text-brand"><FileText aria-hidden="true" className="size-5" /></span>
               <span><span className="block text-sm font-black text-ink">발언 영수증 보기</span><span className="mt-1 block text-xs text-muted">발언 당시 원문과 조건</span></span>

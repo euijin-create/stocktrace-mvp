@@ -15,10 +15,16 @@ import {
 } from "lucide-react";
 import { ConfidenceMeter } from "@/components/confidence-meter";
 import { ComparisonList, EvidenceCard } from "@/components/evidence-card";
+import { AnalysisInputSummary } from "@/components/analysis-input-summary";
 import { ReceiptCard } from "@/components/receipt-card";
 import { DemoNotice } from "@/components/ui/demo-notice";
 import { StatusBadge, type StatusTone } from "@/components/ui/status-badge";
 import { factChecks } from "@/data/mock-data";
+import {
+  appendAnalysisInput,
+  readAnalysisInputFromRecord,
+  type AnalysisSearchParams,
+} from "@/lib/mock-analysis";
 import {
   CLAIM_TYPE_META,
   COMPARISON_RESULT_META,
@@ -31,7 +37,10 @@ import {
 } from "@/lib/stocktrace";
 import type { OfficialSourceCategory } from "@/types/stocktrace";
 
-type PageProps = { params: Promise<{ id: string }> };
+type PageProps = {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<AnalysisSearchParams>;
+};
 
 const toneMap: Record<SemanticTone, StatusTone> = {
   positive: "success",
@@ -62,12 +71,17 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   };
 }
 
-export default async function FactCheckPage({ params }: PageProps) {
-  const { id } = await params;
+export default async function FactCheckPage({ params, searchParams }: PageProps) {
+  const [{ id }, query] = await Promise.all([params, searchParams]);
   const view = getFactCheckView(id);
   if (!view) notFound();
 
   const { factCheck, statement, influencer, sources, receipt } = view;
+  const analysisInput = readAnalysisInputFromRecord(query);
+  const displayedStatement = analysisInput?.statement ?? statement.text;
+  const displayedInfluencer = analysisInput?.influencerName ?? influencer.displayName;
+  const preserveAnalysisInput = (href: string) =>
+    analysisInput ? appendAnalysisInput(href, analysisInput) : href;
   const verificationMeta = VERIFICATION_STATUS_META[factCheck.status];
   const claimMeta = CLAIM_TYPE_META[statement.primaryType];
   const allExamples = getHomeFactChecks();
@@ -78,6 +92,9 @@ export default async function FactCheckPage({ params }: PageProps) {
         recordedAt: formatKoreanDateTime(receipt.recordedAt),
         snapshot: {
           ...receipt.snapshot,
+          influencerName: analysisInput?.influencerName ?? receipt.snapshot.influencerName,
+          originalText: analysisInput?.statement ?? receipt.snapshot.originalText,
+          contentUrl: analysisInput?.contentUrl ?? receipt.snapshot.contentUrl,
           publishedAt: formatKoreanDateTime(receipt.snapshot.publishedAt),
           priceAtStatement: receipt.snapshot.priceAtStatement
             ? {
@@ -117,6 +134,7 @@ export default async function FactCheckPage({ params }: PageProps) {
       </div>
 
       <DemoNotice className="mb-6" compact />
+      {analysisInput && <AnalysisInputSummary input={analysisInput} className="mb-6" />}
 
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_300px] lg:items-start">
         <div className="space-y-6">
@@ -142,7 +160,7 @@ export default async function FactCheckPage({ params }: PageProps) {
                   <Quote aria-hidden="true" className="size-3.5" /> 원문 발언
                 </div>
                 <blockquote className="mt-2 break-words text-base font-extrabold leading-7 text-ink sm:text-lg sm:leading-8">
-                  “{statement.text}”
+                  “{displayedStatement}”
                 </blockquote>
               </div>
 
@@ -150,9 +168,13 @@ export default async function FactCheckPage({ params }: PageProps) {
                 <div className="rounded-xl border border-line p-4">
                   <dt className="flex items-center gap-2 text-xs font-semibold text-muted"><UserRound aria-hidden="true" className="size-3.5" /> 인플루언서</dt>
                   <dd className="mt-1.5">
-                    <Link href={view.influencerHref} className="inline-flex min-h-7 items-center gap-1 text-sm font-extrabold text-ink hover:text-action">
-                      {influencer.displayName}<ChevronRight aria-hidden="true" className="size-3.5" />
-                    </Link>
+                    {analysisInput ? (
+                      <span className="text-sm font-extrabold text-ink">{displayedInfluencer}</span>
+                    ) : (
+                      <Link href={view.influencerHref} className="inline-flex min-h-7 items-center gap-1 text-sm font-extrabold text-ink hover:text-action">
+                        {displayedInfluencer}<ChevronRight aria-hidden="true" className="size-3.5" />
+                      </Link>
+                    )}
                   </dd>
                 </div>
                 <div className="rounded-xl border border-line p-4">
@@ -223,7 +245,7 @@ export default async function FactCheckPage({ params }: PageProps) {
                   <p className="text-xs font-extrabold tracking-[0.12em] text-brand">STATEMENT RECEIPT</p>
                   <h2 id="receipt-section-title" className="mt-1.5 text-xl font-black tracking-[-0.025em] text-ink">발언 기록</h2>
                 </div>
-                <Link href={`/receipts/${formattedReceipt.id}`} className="inline-flex min-h-11 items-center gap-1.5 rounded-xl px-3 text-sm font-extrabold text-action hover:bg-blue-50">
+                <Link href={preserveAnalysisInput(`/receipts/${formattedReceipt.id}`)} className="inline-flex min-h-11 items-center gap-1.5 rounded-xl px-3 text-sm font-extrabold text-action hover:bg-blue-50">
                   영수증 단독 화면 <ArrowRight aria-hidden="true" className="size-4" />
                 </Link>
               </div>
@@ -262,7 +284,7 @@ export default async function FactCheckPage({ params }: PageProps) {
             <h2 className="text-sm font-black text-ink">이 기록의 다음 단계</h2>
             <div className="mt-3 space-y-2">
               {receipt && (
-                <Link href={`/receipts/${receipt.id}`} className="flex min-h-11 items-center justify-between rounded-xl bg-slate-50 px-3 text-sm font-bold text-ink hover:bg-[#edf5f5]">
+                <Link href={preserveAnalysisInput(`/receipts/${receipt.id}`)} className="flex min-h-11 items-center justify-between rounded-xl bg-slate-50 px-3 text-sm font-bold text-ink hover:bg-[#edf5f5]">
                   <span className="flex items-center gap-2"><FileText aria-hidden="true" className="size-4 text-brand" /> 발언 영수증</span>
                   <ChevronRight aria-hidden="true" className="size-4" />
                 </Link>

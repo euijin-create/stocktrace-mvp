@@ -3,8 +3,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { AlertTriangle, CheckCircle2, Clock3, Layers3 } from "lucide-react";
+import { AnalysisInputSummary } from "@/components/analysis-input-summary";
 import { PredictionCard } from "@/components/prediction-card";
 import { mockDatabase } from "@/data/mock-data";
+import { appendAnalysisInput, readAnalysisInput } from "@/lib/mock-analysis";
 import { formatKoreanDate, getPredictionView } from "@/lib/stocktrace";
 import type { PredictionStatus } from "@/types/stocktrace";
 
@@ -27,6 +29,10 @@ function filterForStatus(status?: PredictionStatus): Filter {
 export function PredictionExplorer() {
   const searchParams = useSearchParams();
   const focusId = searchParams.get("focus");
+  const analysisInput = useMemo(
+    () => readAnalysisInput((key) => searchParams.get(key)),
+    [searchParams],
+  );
   const views = useMemo(
     () => mockDatabase.predictions.map(({ id }) => getPredictionView(id)).filter((view) => view !== undefined),
     [],
@@ -51,6 +57,7 @@ export function PredictionExplorer() {
 
   return (
     <div>
+      {analysisInput && <AnalysisInputSummary input={analysisInput} className="mb-6" />}
       <div className="surface-card flex gap-2 overflow-x-auto p-2" role="group" aria-label="예측 상태 필터">
         {filters.map((item) => {
           const active = filter === item.id;
@@ -93,11 +100,15 @@ export function PredictionExplorer() {
                 </p>
               )}
               <PredictionCard
-                href={`/predictions/${prediction.id}`}
-                influencerName={influencer.displayName}
+                href={
+                  focused && analysisInput
+                    ? appendAnalysisInput(`/predictions/${prediction.id}`, analysisInput)
+                    : `/predictions/${prediction.id}`
+                }
+                influencerName={focused && analysisInput ? analysisInput.influencerName : influencer.displayName}
                 stockName={stock.name}
                 stockSymbol={`${stock.market} · ${stock.symbol}`}
-                originalText={statement.text}
+                originalText={focused && analysisInput ? analysisInput.statement : statement.text}
                 prediction={{
                   id: prediction.id,
                   statedAt: formatKoreanDate(prediction.statedAt),

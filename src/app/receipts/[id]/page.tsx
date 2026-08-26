@@ -13,9 +13,15 @@ import {
   ReceiptText,
   UserRound,
 } from "lucide-react";
+import { AnalysisInputSummary } from "@/components/analysis-input-summary";
 import { ReceiptCard } from "@/components/receipt-card";
 import { DemoNotice } from "@/components/ui/demo-notice";
 import { mockDatabase, receipts } from "@/data/mock-data";
+import {
+  appendAnalysisInput,
+  readAnalysisInputFromRecord,
+  type AnalysisSearchParams,
+} from "@/lib/mock-analysis";
 import {
   formatKoreanDateTime,
   getInfluencerById,
@@ -23,7 +29,10 @@ import {
   getStatementById,
 } from "@/lib/stocktrace";
 
-type PageProps = { params: Promise<{ id: string }> };
+type PageProps = {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<AnalysisSearchParams>;
+};
 
 export function generateStaticParams() {
   return receipts.map(({ id }) => ({ id }));
@@ -38,11 +47,14 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   };
 }
 
-export default async function ReceiptPage({ params }: PageProps) {
-  const { id } = await params;
+export default async function ReceiptPage({ params, searchParams }: PageProps) {
+  const [{ id }, query] = await Promise.all([params, searchParams]);
   const receipt = getReceiptById(id);
   if (!receipt) notFound();
 
+  const analysisInput = readAnalysisInputFromRecord(query);
+  const preserveAnalysisInput = (href: string) =>
+    analysisInput ? appendAnalysisInput(href, analysisInput) : href;
   const statement = getStatementById(receipt.statementId);
   const influencer = statement ? getInfluencerById(statement.influencerId) : undefined;
   const factCheck = mockDatabase.factChecks.find((item) => item.statementId === receipt.statementId);
@@ -53,6 +65,9 @@ export default async function ReceiptPage({ params }: PageProps) {
     recordedAt: formatKoreanDateTime(receipt.recordedAt),
     snapshot: {
       ...receipt.snapshot,
+      influencerName: analysisInput?.influencerName ?? receipt.snapshot.influencerName,
+      originalText: analysisInput?.statement ?? receipt.snapshot.originalText,
+      contentUrl: analysisInput?.contentUrl ?? receipt.snapshot.contentUrl,
       publishedAt: formatKoreanDateTime(receipt.snapshot.publishedAt),
       priceAtStatement: receipt.snapshot.priceAtStatement
         ? {
@@ -83,13 +98,14 @@ export default async function ReceiptPage({ params }: PageProps) {
           <h1 className="mt-2 balance-text text-3xl font-black tracking-[-0.04em] text-ink sm:text-4xl">발언 당시의 정보를 한 장에</h1>
           <p className="mt-3 max-w-2xl text-sm leading-6 text-muted sm:text-base">원문, 게시 시점, 종목과 당시 주가를 기록해 이후의 검증·평가와 연결합니다.</p>
         </div>
-        <Link href={factCheck ? `/fact-checks/${factCheck.id}` : "/analyze"} className="inline-flex min-h-11 w-fit items-center gap-2 rounded-xl border border-line bg-white px-4 text-sm font-extrabold text-ink hover:bg-slate-50">
+        <Link href={preserveAnalysisInput(factCheck ? `/fact-checks/${factCheck.id}` : "/analyze")} className="inline-flex min-h-11 w-fit items-center gap-2 rounded-xl border border-line bg-white px-4 text-sm font-extrabold text-ink hover:bg-slate-50">
           <ArrowLeft aria-hidden="true" className="size-4" />
           {factCheck ? "팩트체크로 돌아가기" : "분석으로 돌아가기"}
         </Link>
       </div>
 
       <DemoNotice compact className="mb-6" />
+      {analysisInput && <AnalysisInputSummary input={analysisInput} className="mb-6" />}
 
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_290px] lg:items-start">
         <ReceiptCard receipt={formattedReceipt} />
@@ -120,13 +136,13 @@ export default async function ReceiptPage({ params }: PageProps) {
             <h2 id="connected-title" className="text-sm font-black text-ink">연결된 기록</h2>
             <div className="mt-3 space-y-2">
               {factCheck && (
-                <Link href={`/fact-checks/${factCheck.id}`} className="flex min-h-11 items-center justify-between gap-2 rounded-xl bg-slate-50 px-3 text-sm font-bold text-ink hover:bg-[#edf5f5]">
+                <Link href={preserveAnalysisInput(`/fact-checks/${factCheck.id}`)} className="flex min-h-11 items-center justify-between gap-2 rounded-xl bg-slate-50 px-3 text-sm font-bold text-ink hover:bg-[#edf5f5]">
                   <span className="flex items-center gap-2"><FileCheck2 aria-hidden="true" className="size-4 text-brand" /> 팩트체크 결과</span>
                   <ChevronRight aria-hidden="true" className="size-4" />
                 </Link>
               )}
               {prediction && (
-                <Link href={`/predictions/${prediction.id}`} className="flex min-h-11 items-center justify-between gap-2 rounded-xl bg-slate-50 px-3 text-sm font-bold text-ink hover:bg-[#edf5f5]">
+                <Link href={preserveAnalysisInput(`/predictions/${prediction.id}`)} className="flex min-h-11 items-center justify-between gap-2 rounded-xl bg-slate-50 px-3 text-sm font-bold text-ink hover:bg-[#edf5f5]">
                   <span className="flex items-center gap-2"><ReceiptText aria-hidden="true" className="size-4 text-brand" /> 예측 추적 결과</span>
                   <ChevronRight aria-hidden="true" className="size-4" />
                 </Link>
