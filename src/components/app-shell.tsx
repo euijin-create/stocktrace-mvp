@@ -22,13 +22,19 @@ type NavigationItem = {
   href: string;
   icon: LucideIcon;
   label: string;
+  mobileLabel?: string;
 };
 
 const navigation: NavigationItem[] = [
   { href: "/", icon: Home, label: "홈" },
   { href: "/analyze", icon: ScanSearch, label: "분석" },
   { href: "/predictions", icon: ChartNoAxesCombined, label: "예측" },
-  { href: "/influencers/stock-king", icon: UserRound, label: "프로필" },
+  {
+    href: "/influencers",
+    icon: UserRound,
+    label: "인플루언서 프로필",
+    mobileLabel: "인플루언서",
+  },
 ];
 
 function isCurrentPath(pathname: string, href: string) {
@@ -128,7 +134,7 @@ export function AppShell({ children }: AppShellProps) {
                   className={`size-5 ${active ? "fill-blue-100" : ""}`}
                   strokeWidth={active ? 2.35 : 2}
                 />
-                <span>{item.label}</span>
+                <span>{item.mobileLabel ?? item.label}</span>
               </Link>
             );
           })}

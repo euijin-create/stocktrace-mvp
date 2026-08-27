@@ -36,6 +36,7 @@ import {
   formatKoreanDateTime,
   getFactCheckView,
   getHomeFactChecks,
+  resolveInfluencerProfileHref,
   type SemanticTone,
 } from "@/lib/stocktrace";
 import type { OfficialSourceCategory } from "@/types/stocktrace";
@@ -83,6 +84,10 @@ export default async function FactCheckPage({ params, searchParams }: PageProps)
   const analysisInput = readAnalysisInputFromRecord(query);
   const displayedStatement = analysisInput?.statement ?? statement.text;
   const displayedInfluencer = analysisInput?.influencerName ?? influencer.displayName;
+  const influencerProfileHref = resolveInfluencerProfileHref(
+    analysisInput?.influencerName,
+    influencer.slug,
+  );
   const preserveAnalysisInput = (href: string) =>
     analysisInput ? appendAnalysisInput(href, analysisInput) : href;
   const verificationMeta = VERIFICATION_STATUS_META[factCheck.status];
@@ -201,13 +206,9 @@ export default async function FactCheckPage({ params, searchParams }: PageProps)
               <div className="rounded-xl border border-line p-4">
                 <dt className="flex items-center gap-2 text-xs font-semibold text-muted"><UserRound aria-hidden="true" className="size-3.5" /> 인플루언서</dt>
                 <dd className="mt-1.5">
-                  {analysisInput ? (
-                    <span className="text-sm font-extrabold text-ink">{displayedInfluencer}</span>
-                  ) : (
-                    <Link href={view.influencerHref} className="inline-flex min-h-7 items-center gap-1 text-sm font-extrabold text-ink hover:text-action">
-                      {displayedInfluencer}<ChevronRight aria-hidden="true" className="size-3.5" />
-                    </Link>
-                  )}
+                  <Link href={influencerProfileHref} className="inline-flex min-h-7 items-center gap-1 text-sm font-extrabold text-ink hover:text-action">
+                    {displayedInfluencer}<ChevronRight aria-hidden="true" className="size-3.5" />
+                  </Link>
                 </dd>
               </div>
               <div className="rounded-xl border border-line p-4">
@@ -315,7 +316,7 @@ export default async function FactCheckPage({ params, searchParams }: PageProps)
                 <span className="flex items-center gap-2"><ArrowRight aria-hidden="true" className="size-4 text-brand" /> 예측 추적 보기</span>
                 <ChevronRight aria-hidden="true" className="size-4" />
               </Link>
-              <Link href={view.influencerHref} className="flex min-h-11 items-center justify-between rounded-xl bg-slate-50 px-3 text-sm font-bold text-ink hover:bg-[#edf5f5]">
+              <Link href={influencerProfileHref} className="flex min-h-11 items-center justify-between rounded-xl bg-slate-50 px-3 text-sm font-bold text-ink hover:bg-[#edf5f5]">
                 <span className="flex items-center gap-2"><UserRound aria-hidden="true" className="size-4 text-brand" /> 프로필 보기</span>
                 <ChevronRight aria-hidden="true" className="size-4" />
               </Link>

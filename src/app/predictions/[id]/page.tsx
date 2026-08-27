@@ -35,6 +35,7 @@ import {
   formatPercentPoint,
   getPredictionView,
   PREDICTION_STATUS_META,
+  resolveInfluencerProfileHref,
   type SemanticTone,
 } from "@/lib/stocktrace";
 
@@ -71,6 +72,11 @@ export default async function PredictionDetailPage({ params, searchParams }: Pag
 
   const { prediction, statement, influencer, stock, receipt } = view;
   const analysisInput = readAnalysisInputFromRecord(query);
+  const displayedInfluencer = analysisInput?.influencerName ?? influencer.displayName;
+  const influencerProfileHref = resolveInfluencerProfileHref(
+    analysisInput?.influencerName,
+    influencer.slug,
+  );
   const preserveAnalysisInput = (href: string) =>
     analysisInput ? appendAnalysisInput(href, analysisInput) : href;
   const evaluation = prediction.evaluation;
@@ -139,9 +145,13 @@ export default async function PredictionDetailPage({ params, searchParams }: Pag
                 </h2>
                 <span className="text-xs font-semibold text-muted">{stock.market} · {stock.symbol}</span>
               </div>
-              <p className="mt-1 text-sm font-semibold text-muted">
-                {analysisInput?.influencerName ?? influencer.displayName}
-              </p>
+              <Link
+                href={influencerProfileHref}
+                className="mt-1 inline-flex min-h-7 items-center gap-1 text-sm font-semibold text-muted hover:text-action"
+              >
+                {displayedInfluencer}
+                <ChevronRight aria-hidden="true" className="size-3.5" />
+              </Link>
             </div>
             <StatusBadge tone={toneMap[statusMeta.tone]} className="min-h-9 px-3 text-sm">
               {statusMeta.label}
@@ -308,7 +318,7 @@ export default async function PredictionDetailPage({ params, searchParams }: Pag
 
           <PredictionCard
             href="#evaluation-detail"
-            influencerName={analysisInput?.influencerName ?? influencer.displayName}
+            influencerName={displayedInfluencer}
             stockName={stock.name}
             stockSymbol={`${stock.market} · ${stock.symbol}`}
             originalText={analysisInput?.statement ?? statement.text}
@@ -340,10 +350,10 @@ export default async function PredictionDetailPage({ params, searchParams }: Pag
             <ArrowRight aria-hidden="true" className="size-4 text-slate-400 transition group-hover:translate-x-1" />
           </Link>
         )}
-        <Link href={view.influencerHref} className="surface-card group flex min-h-20 items-center justify-between gap-4 p-4 sm:p-5">
+        <Link href={influencerProfileHref} className="surface-card group flex min-h-20 items-center justify-between gap-4 p-4 sm:p-5">
           <span className="flex items-center gap-3">
             <span className="flex size-10 items-center justify-center rounded-xl bg-[#e8f2f2] text-brand"><UserRound aria-hidden="true" className="size-5" /></span>
-            <span><span className="block text-sm font-black text-ink">{influencer.displayName} 프로필</span><span className="mt-1 block text-xs text-muted">전체 표본과 항목별 지표</span></span>
+            <span><span className="block text-sm font-black text-ink">{displayedInfluencer} 프로필</span><span className="mt-1 block text-xs text-muted">전체 표본과 항목별 지표</span></span>
           </span>
           <ArrowRight aria-hidden="true" className="size-4 text-slate-400 transition group-hover:translate-x-1" />
         </Link>

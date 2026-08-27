@@ -335,6 +335,7 @@ export default function HomePage() {
           <Link
             href="/analyze"
             className="inline-flex min-h-13 items-center justify-center gap-2 rounded-xl bg-ink px-6 text-sm font-extrabold text-white transition hover:bg-[#1c4053]"
+            style={{ color: "#ffffff" }}
           >
             <DatabaseZap aria-hidden="true" className="size-4.5" />
             데모 분석 시작하기

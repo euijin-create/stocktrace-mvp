@@ -273,6 +273,7 @@ export const routes = {
   factCheck: (id: string) => `/fact-checks/${id}`,
   predictions: (focusId?: string) =>
     focusId ? `/predictions?focus=${encodeURIComponent(focusId)}` : "/predictions",
+  influencers: "/influencers",
   influencer: (slug: string) => `/influencers/${slug}`,
   receipt: (id: string) => `/receipts/${id}`,
 } as const;
@@ -422,6 +423,36 @@ export function getInfluencerBySlug(
   database: MockDatabase = mockDatabase,
 ): Influencer | undefined {
   return database.influencers.find((influencer) => influencer.slug === slug);
+}
+
+function normalizeInfluencerSearch(value: string): string {
+  return value.normalize("NFKC").trim().toLocaleLowerCase("ko-KR");
+}
+
+export function resolveInfluencerProfileHref(
+  name: string | undefined,
+  fallbackSlug?: string,
+  database: MockDatabase = mockDatabase,
+): string {
+  const normalizedName = name ? normalizeInfluencerSearch(name) : "";
+
+  if (!normalizedName) {
+    return fallbackSlug ? routes.influencer(fallbackSlug) : routes.influencers;
+  }
+
+  const matches = database.influencers.filter((influencer) => {
+    const searchableValues = [influencer.displayName, influencer.channelName]
+      .filter((value): value is string => Boolean(value))
+      .map(normalizeInfluencerSearch);
+
+    return searchableValues.some((value) => value.includes(normalizedName));
+  });
+
+  if (matches.length === 1) {
+    return routes.influencer(matches[0].slug);
+  }
+
+  return `${routes.influencers}?query=${encodeURIComponent(name?.trim() ?? "")}`;
 }
 
 export function getStockById(id: string, database: MockDatabase = mockDatabase): Stock | undefined {
@@ -782,4 +813,3 @@ export function assertMockDataIsValid(database: MockDatabase = mockDatabase): vo
     throw new Error(`StockTrace mock data validation failed:\n${issues.join("\n")}`);
   }
 }
-

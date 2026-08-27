@@ -85,7 +85,9 @@ export default async function InfluencerProfilePage({ params }: PageProps) {
       <nav aria-label="현재 위치" className="flex items-center gap-1.5 text-xs font-semibold text-muted">
         <Link href="/" className="rounded-md py-1 hover:text-ink">홈</Link>
         <ChevronRight aria-hidden="true" className="size-3.5" />
-        <span aria-current="page" className="text-ink">인플루언서 프로필</span>
+        <Link href="/influencers" className="rounded-md py-1 hover:text-ink">인플루언서 프로필</Link>
+        <ChevronRight aria-hidden="true" className="size-3.5" />
+        <span aria-current="page" className="text-ink">{influencer.displayName}</span>
       </nav>
 
       <section className="surface-card mt-5 overflow-hidden" aria-labelledby="profile-title">
