@@ -7,6 +7,7 @@ import {
   ArrowRight,
   BarChart3,
   CalendarDays,
+  ChevronDown,
   ChevronRight,
   CircleDot,
   FileText,
@@ -20,6 +21,7 @@ import {
 import { AnalysisInputSummary } from "@/components/analysis-input-summary";
 import { PredictionCard } from "@/components/prediction-card";
 import { DemoNotice } from "@/components/ui/demo-notice";
+import { StatusBadge, type StatusTone } from "@/components/ui/status-badge";
 import { predictions } from "@/data/mock-data";
 import {
   appendAnalysisInput,
@@ -32,11 +34,21 @@ import {
   formatPercent,
   formatPercentPoint,
   getPredictionView,
+  PREDICTION_STATUS_META,
+  type SemanticTone,
 } from "@/lib/stocktrace";
 
 type PageProps = {
   params: Promise<{ id: string }>;
   searchParams: Promise<AnalysisSearchParams>;
+};
+
+const toneMap: Record<SemanticTone, StatusTone> = {
+  positive: "success",
+  information: "info",
+  caution: "warning",
+  negative: "danger",
+  neutral: "neutral",
 };
 
 export function generateStaticParams() {
@@ -62,6 +74,25 @@ export default async function PredictionDetailPage({ params, searchParams }: Pag
   const preserveAnalysisInput = (href: string) =>
     analysisInput ? appendAnalysisInput(href, analysisInput) : href;
   const evaluation = prediction.evaluation;
+  const statusMeta = PREDICTION_STATUS_META[prediction.status];
+  const targetSummary = prediction.targetReturnPct !== undefined
+    ? formatPercent(prediction.targetReturnPct)
+    : prediction.targetPrice
+      ? formatMoney(prediction.targetPrice)
+      : "조건 미지정";
+  const targetDetail = [
+    prediction.targetPrice ? `목표가 ${formatMoney(prediction.targetPrice)}` : null,
+    prediction.horizonLabel ? `기간 ${prediction.horizonLabel}` : null,
+  ].filter((value): value is string => Boolean(value)).join(" · ");
+  const targetReachedLabel = evaluation?.targetReached === null
+    ? "평가 제외"
+    : evaluation?.targetReached
+      ? "도달"
+      : evaluation
+        ? "미도달"
+        : prediction.status === "insufficient_conditions"
+          ? "평가 제외"
+          : "평가 전";
   const cardEvaluation = evaluation && evaluation.targetReached !== null
     ? { ...evaluation, evaluatedAt: formatKoreanDate(evaluation.evaluatedAt), targetReached: evaluation.targetReached }
     : undefined;
@@ -97,35 +128,69 @@ export default async function PredictionDetailPage({ params, searchParams }: Pag
         </Link>
       </div>
 
-      <DemoNotice compact className="mb-6" />
-      {analysisInput && <AnalysisInputSummary input={analysisInput} className="mb-6" />}
+      <section id="prediction-overview" className="surface-card scroll-mt-24 overflow-hidden" aria-labelledby="prediction-overview-title">
+        <div className="border-b border-line bg-[#f8fbfa] px-5 py-5 sm:px-7">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <div className="min-w-0">
+              <p className="text-xs font-extrabold tracking-[0.12em] text-brand">평가 요약</p>
+              <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1">
+                <h2 id="prediction-overview-title" className="text-xl font-black tracking-[-0.025em] text-ink">
+                  {stock.name} 예측 결과
+                </h2>
+                <span className="text-xs font-semibold text-muted">{stock.market} · {stock.symbol}</span>
+              </div>
+              <p className="mt-1 text-sm font-semibold text-muted">
+                {analysisInput?.influencerName ?? influencer.displayName}
+              </p>
+            </div>
+            <StatusBadge tone={toneMap[statusMeta.tone]} className="min-h-9 px-3 text-sm">
+              {statusMeta.label}
+            </StatusBadge>
+          </div>
 
-      <PredictionCard
-        href="#evaluation-detail"
-        influencerName={analysisInput?.influencerName ?? influencer.displayName}
-        stockName={stock.name}
-        stockSymbol={`${stock.market} · ${stock.symbol}`}
-        originalText={analysisInput?.statement ?? statement.text}
-        prediction={{
-          id: prediction.id,
-          statedAt: formatKoreanDate(prediction.statedAt),
-          priceAtStatement: {
-            ...prediction.priceAtStatement,
-            capturedAt: formatKoreanDate(prediction.priceAtStatement.capturedAt),
-          },
-          direction: prediction.direction,
-          targetReturnPct: prediction.targetReturnPct,
-          targetPrice: prediction.targetPrice,
-          horizonLabel: prediction.horizonLabel,
-          evaluationDueAt: prediction.evaluationDueAt ? formatKoreanDate(prediction.evaluationDueAt) : undefined,
-          missingConditions: prediction.missingConditions,
-          status: prediction.status,
-          evaluation: cardEvaluation,
-        }}
-      />
+          <blockquote className="mt-5 rounded-2xl border-l-4 border-brand bg-white px-5 py-4 text-base font-extrabold leading-7 text-ink sm:text-lg sm:leading-8">
+            “{analysisInput?.statement ?? statement.text}”
+          </blockquote>
+        </div>
 
+        <div className="p-5 sm:p-7">
+          <dl className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <OverviewMetric label="예측 목표" value={targetSummary} detail={targetDetail || "목표 조건 확인 필요"} />
+            <OverviewMetric
+              label="실제 결과"
+              value={evaluation ? formatPercent(evaluation.actualReturnPct) : prediction.status === "insufficient_conditions" ? "평가 제외" : "평가 전"}
+              detail={evaluation ? `${formatKoreanDate(evaluation.evaluatedAt)} 기준` : statusMeta.description}
+            />
+            <OverviewMetric
+              label="시장 대비 성과"
+              value={evaluation ? formatPercentPoint(evaluation.excessReturnPct) : prediction.status === "insufficient_conditions" ? "평가 제외" : "평가 전"}
+              detail={evaluation ? `${evaluation.benchmarkName} ${formatPercent(evaluation.benchmarkReturnPct)}` : statusMeta.description}
+            />
+            <OverviewMetric label="목표 도달 여부" value={targetReachedLabel} detail={statusMeta.label} />
+          </dl>
+
+          <div className="mt-5 rounded-2xl bg-[#102f3e] p-5 text-white">
+            <p className="text-xs font-bold text-cyan-200">최종 평가</p>
+            <p className="mt-2 text-[15px] font-semibold leading-7">
+              {evaluation?.finalAssessment ?? statusMeta.description}
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <DemoNotice compact className="mt-4" />
+
+      <details id="evaluation-detail" className="group surface-card mt-6 scroll-mt-24 overflow-hidden">
+        <summary className="flex min-h-18 cursor-pointer list-none items-center justify-between gap-4 px-5 py-4 sm:px-6">
+          <span>
+            <span className="block text-sm font-black text-ink">상세 평가</span>
+            <span className="mt-1 block text-xs leading-5 text-muted">가격 범위, 최대하락률과 시장 대비 계산 방식을 확인합니다.</span>
+          </span>
+          <ChevronDown aria-hidden="true" className="size-5 shrink-0 text-slate-400 transition group-open:rotate-180" />
+        </summary>
+        <div className="border-t border-line px-5 pb-6 pt-5 sm:px-6">
       {evaluation ? (
-        <section id="evaluation-detail" className="mt-7 scroll-mt-24" aria-labelledby="evaluation-title">
+        <section id="evaluation-breakdown" aria-labelledby="evaluation-title">
           <div className="mb-4">
             <p className="text-xs font-extrabold tracking-[0.12em] text-brand">EVALUATION BREAKDOWN</p>
             <h2 id="evaluation-title" className="mt-1.5 text-xl font-black tracking-[-0.025em] text-ink">평가 결과 자세히 보기</h2>
@@ -198,7 +263,7 @@ export default async function PredictionDetailPage({ params, searchParams }: Pag
           </div>
         </section>
       ) : prediction.status === "insufficient_conditions" ? (
-        <section id="evaluation-detail" className="surface-card mt-7 scroll-mt-24 p-5 sm:p-7" aria-labelledby="conditions-title">
+        <section id="evaluation-conditions" className="p-1 sm:p-2" aria-labelledby="conditions-title">
           <div className="flex items-start gap-3">
             <span className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-amber-50 text-amber-800"><AlertTriangle aria-hidden="true" className="size-5" /></span>
             <div>
@@ -221,14 +286,51 @@ export default async function PredictionDetailPage({ params, searchParams }: Pag
           <p className="mt-5 flex gap-2 rounded-xl bg-blue-50 p-4 text-xs leading-5 text-blue-900"><Info aria-hidden="true" className="mt-0.5 size-4 shrink-0" /> 이 발언은 실패 예측으로 계산하지 않으며 인플루언서의 예측 성과 표본에서도 제외합니다.</p>
         </section>
       ) : (
-        <section id="evaluation-detail" className="surface-card mt-7 scroll-mt-24 p-6 text-center" aria-labelledby="tracking-title">
+        <section id="evaluation-tracking" className="p-6 text-center" aria-labelledby="tracking-title">
           <BarChart3 aria-hidden="true" className="mx-auto size-8 text-brand" />
           <h2 id="tracking-title" className="mt-3 text-lg font-black text-ink">아직 추적 중인 예측입니다</h2>
           <p className="mt-2 text-sm leading-6 text-muted">평가 예정일 이후 실제 주가와 비교 시장지수 결과가 추가됩니다.</p>
         </section>
       )}
+        </div>
+      </details>
 
-      <section className="mt-7 grid gap-3 sm:grid-cols-2" aria-label="연결된 기록">
+      <details className="group surface-card mt-4 overflow-hidden">
+        <summary className="flex min-h-18 cursor-pointer list-none items-center justify-between gap-4 px-5 py-4 sm:px-6">
+          <span>
+            <span className="block text-sm font-black text-ink">발언 기록</span>
+            <span className="mt-1 block text-xs leading-5 text-muted">발언 당시 조건, 입력 원문과 연결된 영수증을 확인합니다.</span>
+          </span>
+          <ChevronDown aria-hidden="true" className="size-5 shrink-0 text-slate-400 transition group-open:rotate-180" />
+        </summary>
+        <div className="border-t border-line p-5 sm:p-6">
+          {analysisInput && <AnalysisInputSummary input={analysisInput} className="mb-5" />}
+
+          <PredictionCard
+            href="#evaluation-detail"
+            influencerName={analysisInput?.influencerName ?? influencer.displayName}
+            stockName={stock.name}
+            stockSymbol={`${stock.market} · ${stock.symbol}`}
+            originalText={analysisInput?.statement ?? statement.text}
+            prediction={{
+              id: prediction.id,
+              statedAt: formatKoreanDate(prediction.statedAt),
+              priceAtStatement: {
+                ...prediction.priceAtStatement,
+                capturedAt: formatKoreanDate(prediction.priceAtStatement.capturedAt),
+              },
+              direction: prediction.direction,
+              targetReturnPct: prediction.targetReturnPct,
+              targetPrice: prediction.targetPrice,
+              horizonLabel: prediction.horizonLabel,
+              evaluationDueAt: prediction.evaluationDueAt ? formatKoreanDate(prediction.evaluationDueAt) : undefined,
+              missingConditions: prediction.missingConditions,
+              status: prediction.status,
+              evaluation: cardEvaluation,
+            }}
+          />
+
+      <section className="mt-5 grid gap-3 sm:grid-cols-2" aria-label="연결된 기록">
         {receipt && (
           <Link href={preserveAnalysisInput(`/receipts/${receipt.id}`)} className="surface-card group flex min-h-20 items-center justify-between gap-4 p-4 sm:p-5">
             <span className="flex items-center gap-3">
@@ -246,7 +348,27 @@ export default async function PredictionDetailPage({ params, searchParams }: Pag
           <ArrowRight aria-hidden="true" className="size-4 text-slate-400 transition group-hover:translate-x-1" />
         </Link>
       </section>
+        </div>
+      </details>
     </main>
+  );
+}
+
+function OverviewMetric({
+  label,
+  value,
+  detail,
+}: {
+  label: string;
+  value: string;
+  detail: string;
+}) {
+  return (
+    <div className="rounded-2xl border border-line bg-white p-4">
+      <dt className="text-xs font-semibold text-muted">{label}</dt>
+      <dd className="number-tabular mt-2 text-xl font-black tracking-[-0.02em] text-ink">{value}</dd>
+      <dd className="mt-1 text-xs leading-5 text-muted">{detail}</dd>
+    </div>
   );
 }
 

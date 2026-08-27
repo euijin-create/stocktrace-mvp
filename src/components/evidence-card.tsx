@@ -1,4 +1,5 @@
 import { Building2, CalendarDays, FileKey2, Landmark } from "lucide-react";
+import { OfficialSourceAction } from "@/components/official-source-action";
 
 export interface EvidenceCardProps {
   organization: string;
@@ -7,6 +8,7 @@ export interface EvidenceCardProps {
   documentDate: string;
   referenceNo?: string;
   keyPoint: string;
+  sourceUrl?: string;
 }
 
 export function EvidenceCard({
@@ -16,6 +18,7 @@ export function EvidenceCard({
   documentDate,
   referenceNo,
   keyPoint,
+  sourceUrl,
 }: EvidenceCardProps) {
   return (
     <article className="rounded-2xl border border-line bg-white p-5 sm:p-6">
@@ -52,7 +55,14 @@ export function EvidenceCard({
         <p className="text-xs font-extrabold text-emerald-800">근거가 되는 핵심 내용</p>
         <p className="mt-1.5 text-sm leading-6 text-slate-700">{keyPoint}</p>
       </div>
-      <p className="mt-3 text-xs leading-5 text-muted">MVP용 예시 자료로, 외부 원문 링크는 연결되어 있지 않습니다.</p>
+      <div className="mt-4 flex flex-col gap-3 border-t border-line pt-4 sm:flex-row sm:items-center sm:justify-between">
+        <p className="text-xs leading-5 text-muted">
+          {sourceUrl
+            ? "공식자료 제공처에서 원문을 직접 확인할 수 있습니다."
+            : "MVP용 예시 자료로, 외부 원문 링크는 연결되어 있지 않습니다."}
+        </p>
+        <OfficialSourceAction sourceUrl={sourceUrl} />
+      </div>
     </article>
   );
 }

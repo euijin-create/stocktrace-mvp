@@ -1,10 +1,12 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import type { ReactNode } from "react";
 import {
   ArrowRight,
   Building2,
   CalendarCheck2,
+  ChevronDown,
   ChevronRight,
   FileCheck2,
   FileText,
@@ -16,6 +18,7 @@ import {
 import { ConfidenceMeter } from "@/components/confidence-meter";
 import { ComparisonList, EvidenceCard } from "@/components/evidence-card";
 import { AnalysisInputSummary } from "@/components/analysis-input-summary";
+import { FactCheckCorrectionRequest } from "@/components/fact-check-correction-request";
 import { ReceiptCard } from "@/components/receipt-card";
 import { DemoNotice } from "@/components/ui/demo-notice";
 import { StatusBadge, type StatusTone } from "@/components/ui/status-badge";
@@ -133,124 +136,143 @@ export default async function FactCheckPage({ params, searchParams }: PageProps)
         </div>
       </div>
 
-      <DemoNotice className="mb-6" compact />
-      {analysisInput && <AnalysisInputSummary input={analysisInput} className="mb-6" />}
-
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_300px] lg:items-start">
-        <div className="space-y-6">
-          <section className="surface-card overflow-hidden" aria-labelledby="verdict-title">
-            <div className="border-b border-line bg-[#f8fbfa] px-5 py-5 sm:px-7">
-              <div className="flex items-start gap-3">
-                <span className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-[#e6f2ef] text-emerald-700">
-                  <ShieldCheck aria-hidden="true" className="size-5.5" />
-                </span>
-                <div>
-                  <p className="text-xs font-bold text-emerald-700">검증 판단</p>
-                  <h2 id="verdict-title" className="mt-1 text-xl font-black tracking-[-0.02em] text-ink">
-                    {verificationMeta.label}
-                  </h2>
-                  <p className="mt-1.5 text-sm leading-6 text-muted">{verificationMeta.description}</p>
-                </div>
-              </div>
+      <section className="surface-card overflow-hidden" aria-labelledby="verdict-title">
+        <div className="border-b border-line bg-[#f8fbfa] px-5 py-5 sm:px-7">
+          <div className="flex items-start gap-3">
+            <span className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-[#e6f2ef] text-emerald-700">
+              <ShieldCheck aria-hidden="true" className="size-5.5" />
+            </span>
+            <div>
+              <p className="text-xs font-bold text-emerald-700">검증 결과</p>
+              <h2 id="verdict-title" className="mt-1 text-2xl font-black tracking-[-0.03em] text-ink">
+                {verificationMeta.label}
+              </h2>
+              <p className="mt-1.5 text-sm leading-6 text-muted">{verificationMeta.description}</p>
             </div>
+          </div>
+        </div>
 
-            <div className="p-5 sm:p-7">
-              <div className="rounded-2xl border-l-4 border-brand bg-slate-50 px-5 py-4">
-                <div className="flex items-center gap-2 text-xs font-bold text-muted">
-                  <Quote aria-hidden="true" className="size-3.5" /> 원문 발언
-                </div>
-                <blockquote className="mt-2 break-words text-base font-extrabold leading-7 text-ink sm:text-lg sm:leading-8">
-                  “{displayedStatement}”
-                </blockquote>
+        <div className="p-5 sm:p-7">
+          <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_260px]">
+            <div className="rounded-2xl border-l-4 border-brand bg-slate-50 px-5 py-4">
+              <div className="flex items-center gap-2 text-xs font-bold text-muted">
+                <Quote aria-hidden="true" className="size-3.5" /> 원문 핵심 발언
               </div>
+              <blockquote className="mt-2 break-words text-base font-extrabold leading-7 text-ink sm:text-lg sm:leading-8">
+                “{displayedStatement}”
+              </blockquote>
+            </div>
+            <div className="rounded-2xl border border-line bg-white p-5">
+              <p className="flex items-center gap-2 text-xs font-semibold text-muted">
+                <Building2 aria-hidden="true" className="size-3.5 text-brand" />
+                기업 또는 종목
+              </p>
+              <p className="mt-2 text-lg font-black tracking-[-0.02em] text-ink">
+                {factCheck.companyOrStockLabel}
+              </p>
+              <p className="mt-2 text-xs leading-5 text-muted">이 발언에서 공식자료와 비교한 대상입니다.</p>
+            </div>
+          </div>
 
-              <dl className="mt-5 grid gap-3 sm:grid-cols-2">
-                <div className="rounded-xl border border-line p-4">
-                  <dt className="flex items-center gap-2 text-xs font-semibold text-muted"><UserRound aria-hidden="true" className="size-3.5" /> 인플루언서</dt>
-                  <dd className="mt-1.5">
-                    {analysisInput ? (
-                      <span className="text-sm font-extrabold text-ink">{displayedInfluencer}</span>
-                    ) : (
-                      <Link href={view.influencerHref} className="inline-flex min-h-7 items-center gap-1 text-sm font-extrabold text-ink hover:text-action">
-                        {displayedInfluencer}<ChevronRight aria-hidden="true" className="size-3.5" />
-                      </Link>
-                    )}
-                  </dd>
-                </div>
-                <div className="rounded-xl border border-line p-4">
-                  <dt className="flex items-center gap-2 text-xs font-semibold text-muted"><Building2 aria-hidden="true" className="size-3.5" /> 언급 기업·종목</dt>
-                  <dd className="mt-1.5 text-sm font-extrabold text-ink">{factCheck.companyOrStockLabel}</dd>
-                </div>
-                <div className="rounded-xl border border-line p-4">
-                  <dt className="flex items-center gap-2 text-xs font-semibold text-muted"><ScanSearch aria-hidden="true" className="size-3.5" /> 발언 유형</dt>
-                  <dd className="mt-1.5 text-sm font-extrabold leading-5 text-ink">{claimMeta.label}</dd>
-                </div>
-                <div className="rounded-xl border border-line p-4">
-                  <dt className="flex items-center gap-2 text-xs font-semibold text-muted"><CalendarCheck2 aria-hidden="true" className="size-3.5" /> 검증일</dt>
-                  <dd className="mt-1.5 text-sm font-extrabold text-ink">{formatKoreanDate(factCheck.checkedAt)}</dd>
-                </div>
-              </dl>
+          <div className="mt-5 rounded-2xl bg-[#102f3e] p-5 text-white">
+            <p className="text-xs font-bold text-cyan-200">StockTrace 판단 요약</p>
+            <p className="mt-2 text-[15px] font-semibold leading-7">{factCheck.summary}</p>
+          </div>
 
-              <div className="mt-5 rounded-2xl bg-[#102f3e] p-5 text-white">
-                <p className="text-xs font-bold text-cyan-200">StockTrace 판단 요약</p>
-                <p className="mt-2 text-[15px] font-semibold leading-7">{factCheck.summary}</p>
+          <ConfidenceMeter
+            className="mt-5"
+            score={factCheck.confidence.score}
+            level={factCheck.confidence.level}
+            rationale={factCheck.confidence.rationale}
+          />
+        </div>
+      </section>
+
+      <DemoNotice className="mt-4" compact />
+
+      <div className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,1fr)_300px] lg:items-start">
+        <div className="space-y-4">
+          <FactCheckDetail
+            title="검증 요약"
+            description="발언 분류, 인플루언서와 검증 시점을 확인합니다."
+          >
+            {analysisInput && <AnalysisInputSummary input={analysisInput} className="mb-5" />}
+            <dl className="grid gap-3 sm:grid-cols-3">
+              <div className="rounded-xl border border-line p-4">
+                <dt className="flex items-center gap-2 text-xs font-semibold text-muted"><UserRound aria-hidden="true" className="size-3.5" /> 인플루언서</dt>
+                <dd className="mt-1.5">
+                  {analysisInput ? (
+                    <span className="text-sm font-extrabold text-ink">{displayedInfluencer}</span>
+                  ) : (
+                    <Link href={view.influencerHref} className="inline-flex min-h-7 items-center gap-1 text-sm font-extrabold text-ink hover:text-action">
+                      {displayedInfluencer}<ChevronRight aria-hidden="true" className="size-3.5" />
+                    </Link>
+                  )}
+                </dd>
               </div>
+              <div className="rounded-xl border border-line p-4">
+                <dt className="flex items-center gap-2 text-xs font-semibold text-muted"><ScanSearch aria-hidden="true" className="size-3.5" /> 발언 유형</dt>
+                <dd className="mt-1.5 text-sm font-extrabold leading-5 text-ink">{claimMeta.label}</dd>
+              </div>
+              <div className="rounded-xl border border-line p-4">
+                <dt className="flex items-center gap-2 text-xs font-semibold text-muted"><CalendarCheck2 aria-hidden="true" className="size-3.5" /> 검증일</dt>
+                <dd className="mt-1.5 text-sm font-extrabold text-ink">{formatKoreanDate(factCheck.checkedAt)}</dd>
+              </div>
+            </dl>
+          </FactCheckDetail>
 
-              <ConfidenceMeter
-                className="mt-5"
-                score={factCheck.confidence.score}
-                level={factCheck.confidence.level}
-                rationale={factCheck.confidence.rationale}
+          <FactCheckDetail
+            title="근거자료"
+            description={`공식자료 비교 ${factCheck.comparisons.length}개 항목 · 참고 자료 ${sources.length}건`}
+          >
+            <section aria-labelledby="comparison-title">
+              <div className="mb-4">
+                <p className="text-xs font-extrabold tracking-[0.12em] text-brand">CLAIM VS SOURCE</p>
+                <h2 id="comparison-title" className="mt-1.5 text-lg font-black tracking-[-0.025em] text-ink">발언과 공식자료 비교</h2>
+              </div>
+              <ComparisonList
+                items={factCheck.comparisons.map((comparison) => ({
+                  ...comparison,
+                  resultLabel: COMPARISON_RESULT_META[comparison.result].label,
+                }))}
               />
-            </div>
-          </section>
+            </section>
 
-          <section aria-labelledby="comparison-title">
-            <div className="mb-4">
-              <p className="text-xs font-extrabold tracking-[0.12em] text-brand">CLAIM VS SOURCE</p>
-              <h2 id="comparison-title" className="mt-1.5 text-xl font-black tracking-[-0.025em] text-ink">발언과 공식자료 비교</h2>
-            </div>
-            <ComparisonList
-              items={factCheck.comparisons.map((comparison) => ({
-                ...comparison,
-                resultLabel: COMPARISON_RESULT_META[comparison.result].label,
-              }))}
-            />
-          </section>
-
-          <section aria-labelledby="sources-title">
-            <div className="mb-4">
-              <p className="text-xs font-extrabold tracking-[0.12em] text-brand">OFFICIAL SOURCES</p>
-              <h2 id="sources-title" className="mt-1.5 text-xl font-black tracking-[-0.025em] text-ink">검증에 사용된 공식자료</h2>
-            </div>
-            <div className="space-y-3">
-              {sources.map((source) => (
-                <EvidenceCard
-                  key={source.id}
-                  organization={source.organization}
-                  title={source.title}
-                  category={sourceCategoryLabel[source.category]}
-                  documentDate={formatKoreanDate(source.documentDate)}
-                  referenceNo={source.referenceNo}
-                  keyPoint={source.keyPoint}
-                />
-              ))}
-            </div>
-          </section>
+            <section className="mt-7" aria-labelledby="sources-title">
+              <div className="mb-4">
+                <p className="text-xs font-extrabold tracking-[0.12em] text-brand">OFFICIAL SOURCES</p>
+                <h2 id="sources-title" className="mt-1.5 text-lg font-black tracking-[-0.025em] text-ink">검증에 사용된 공식자료</h2>
+              </div>
+              <div className="space-y-3">
+                {sources.map((source) => (
+                  <EvidenceCard
+                    key={source.id}
+                    organization={source.organization}
+                    title={source.title}
+                    category={sourceCategoryLabel[source.category]}
+                    documentDate={formatKoreanDate(source.documentDate)}
+                    referenceNo={source.referenceNo}
+                    keyPoint={source.keyPoint}
+                    sourceUrl={source.url}
+                  />
+                ))}
+              </div>
+            </section>
+          </FactCheckDetail>
 
           {formattedReceipt && (
-            <section id="statement-receipt" className="scroll-mt-24" aria-labelledby="receipt-section-title">
-              <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-                <div>
-                  <p className="text-xs font-extrabold tracking-[0.12em] text-brand">STATEMENT RECEIPT</p>
-                  <h2 id="receipt-section-title" className="mt-1.5 text-xl font-black tracking-[-0.025em] text-ink">발언 기록</h2>
-                </div>
+            <FactCheckDetail
+              id="statement-receipt"
+              title="발언 기록"
+              description="발언 영수증과 콘텐츠 변경 이력을 확인합니다."
+            >
+              <div className="mb-4 flex justify-end">
                 <Link href={preserveAnalysisInput(`/receipts/${formattedReceipt.id}`)} className="inline-flex min-h-11 items-center gap-1.5 rounded-xl px-3 text-sm font-extrabold text-action hover:bg-blue-50">
                   영수증 단독 화면 <ArrowRight aria-hidden="true" className="size-4" />
                 </Link>
               </div>
               <ReceiptCard receipt={formattedReceipt} />
-            </section>
+            </FactCheckDetail>
           )}
         </div>
 
@@ -300,6 +322,8 @@ export default async function FactCheckPage({ params, searchParams }: PageProps)
             </div>
           </div>
 
+          <FactCheckCorrectionRequest />
+
           <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-xs leading-5 text-amber-950">
             <strong className="block font-extrabold">해석 시 참고</strong>
             <p className="mt-1.5">공식 근거를 찾지 못한 결과는 곧바로 발언이 거짓이라는 뜻이 아닙니다. 확인 범위와 자료 시점을 함께 살펴보세요.</p>
@@ -307,5 +331,32 @@ export default async function FactCheckPage({ params, searchParams }: PageProps)
         </aside>
       </div>
     </main>
+  );
+}
+
+function FactCheckDetail({
+  children,
+  description,
+  id,
+  title,
+}: {
+  children: ReactNode;
+  description: string;
+  id?: string;
+  title: string;
+}) {
+  return (
+    <details id={id} className="group surface-card scroll-mt-24 overflow-hidden">
+      <summary className="flex min-h-20 cursor-pointer list-none items-center justify-between gap-4 px-5 py-4 marker:hidden hover:bg-slate-50/70 [&::-webkit-details-marker]:hidden sm:px-6">
+        <span className="min-w-0">
+          <span className="block text-base font-black tracking-[-0.02em] text-ink">{title}</span>
+          <span className="mt-1 block text-xs leading-5 text-muted sm:text-sm">{description}</span>
+        </span>
+        <span className="grid size-9 shrink-0 place-items-center rounded-xl border border-line bg-white text-muted transition group-open:rotate-180 group-open:text-brand">
+          <ChevronDown aria-hidden="true" className="size-4" />
+        </span>
+      </summary>
+      <div className="border-t border-line bg-white p-5 sm:p-6">{children}</div>
+    </details>
   );
 }

@@ -71,6 +71,7 @@ export interface PredictionCardProps {
   href: string;
   className?: string;
   compact?: boolean;
+  variant?: "detail" | "list" | "home";
 }
 
 const STATUS_META: Record<
@@ -131,6 +132,7 @@ export function PredictionCard({
   href,
   className = "",
   compact = false,
+  variant = "detail",
 }: PredictionCardProps) {
   const status = STATUS_META[prediction.status];
   const StatusIcon = status.icon;
@@ -144,6 +146,8 @@ export function PredictionCard({
         : "방향 미지정";
   const isInsufficient = prediction.status === "insufficient_conditions";
   const evaluation = prediction.status === "completed" ? prediction.evaluation : undefined;
+  const isSummaryCard = variant !== "detail";
+  const isHomeSummary = variant === "home";
 
   return (
     <article
@@ -159,7 +163,9 @@ export function PredictionCard({
               </span>
             ) : null}
           </div>
-          <p className="mt-1 truncate text-xs text-slate-500">{influencerName}</p>
+          {!isHomeSummary && (
+            <p className="mt-1 truncate text-xs text-slate-500">{influencerName}</p>
+          )}
         </div>
         <span
           className={`inline-flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1.5 text-xs font-semibold ring-1 ring-inset ${status.className}`}
@@ -169,30 +175,32 @@ export function PredictionCard({
         </span>
       </header>
 
-      <blockquote className="mt-4 break-words border-l-2 border-brand/30 pl-3 text-sm font-medium leading-6 text-slate-800">
+      <blockquote className={`mt-4 break-words border-l-2 border-brand/30 pl-3 text-sm font-medium leading-6 text-slate-800 ${isSummaryCard ? "line-clamp-2" : ""}`}>
         “{originalText}”
       </blockquote>
 
-      <dl className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <PredictionMeta label="발언일" value={prediction.statedAt} />
-        <PredictionMeta
-          label="발언 당시 주가"
-          value={formatMoney(prediction.priceAtStatement.price)}
-          detail={prediction.priceAtStatement.sourceLabel}
-        />
-        <PredictionMeta
-          label="예측 방향"
-          value={directionLabel}
-          icon={<DirectionIcon aria-hidden="true" className="size-3.5" />}
-        />
-        <PredictionMeta
-          label="예측 기간"
-          value={prediction.horizonLabel ?? "미지정"}
-        />
-      </dl>
+      {!isSummaryCard && (
+        <dl className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <PredictionMeta label="발언일" value={prediction.statedAt} />
+          <PredictionMeta
+            label="발언 당시 주가"
+            value={formatMoney(prediction.priceAtStatement.price)}
+            detail={prediction.priceAtStatement.sourceLabel}
+          />
+          <PredictionMeta
+            label="예측 방향"
+            value={directionLabel}
+            icon={<DirectionIcon aria-hidden="true" className="size-3.5" />}
+          />
+          <PredictionMeta
+            label="예측 기간"
+            value={prediction.horizonLabel ?? "미지정"}
+          />
+        </dl>
+      )}
 
       {!isInsufficient ? (
-        <dl className="mt-4 grid grid-cols-1 gap-3 rounded-2xl border border-blue-100 bg-blue-50/60 p-4 sm:grid-cols-3">
+        <dl className={`${isSummaryCard ? "mt-5" : "mt-4 sm:grid-cols-3"} grid grid-cols-1 gap-3 rounded-2xl border border-blue-100 bg-blue-50/60 p-4`}>
           <PredictionMeta
             label="목표 수익률"
             value={
@@ -202,16 +210,20 @@ export function PredictionCard({
             }
             emphasized
           />
-          <PredictionMeta
-            label="목표가격"
-            value={prediction.targetPrice ? formatMoney(prediction.targetPrice) : "미지정"}
-            emphasized
-          />
-          <PredictionMeta
-            label="평가 예정일"
-            value={prediction.evaluationDueAt ?? "미지정"}
-            emphasized
-          />
+          {!isSummaryCard && (
+            <>
+              <PredictionMeta
+                label="목표가격"
+                value={prediction.targetPrice ? formatMoney(prediction.targetPrice) : "미지정"}
+                emphasized
+              />
+              <PredictionMeta
+                label="평가 예정일"
+                value={prediction.evaluationDueAt ?? "미지정"}
+                emphasized
+              />
+            </>
+          )}
         </dl>
       ) : (
         <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
@@ -239,7 +251,38 @@ export function PredictionCard({
         </div>
       )}
 
-      {evaluation ? (
+      {evaluation && isSummaryCard ? (
+        <section className="mt-4 rounded-2xl border border-slate-200 bg-slate-950 p-4 text-white" aria-label="예측 핵심 결과">
+          <dl className={`grid grid-cols-2 gap-x-3 gap-y-4 ${isHomeSummary ? "sm:grid-cols-2" : "sm:grid-cols-3"}`}>
+            <ResultMetric label="실제 수익률" value={formatPct(evaluation.actualReturnPct)} />
+            {!isHomeSummary && (
+              <ResultMetric
+                label="시장 대비 성과"
+                value={formatPct(evaluation.excessReturnPct, true)}
+              />
+            )}
+            <ResultMetric
+              label="목표 도달 여부"
+              value={
+                evaluation.targetReached === null
+                  ? "평가 제외"
+                  : evaluation.targetReached
+                    ? "도달"
+                    : "미도달"
+              }
+              icon={
+                evaluation.targetReached === null ? (
+                  <CircleDot aria-hidden="true" className="size-4 text-slate-300" />
+                ) : evaluation.targetReached ? (
+                  <CheckCircle2 aria-hidden="true" className="size-4 text-emerald-300" />
+                ) : (
+                  <XCircle aria-hidden="true" className="size-4 text-rose-300" />
+                )
+              }
+            />
+          </dl>
+        </section>
+      ) : evaluation ? (
         <section className="mt-5 rounded-2xl border border-slate-200 bg-slate-950 p-4 text-white" aria-label="예측 평가 결과">
           <div className="flex items-center justify-between gap-3">
             <h3 className="flex items-center gap-2 text-sm font-bold">
@@ -299,8 +342,10 @@ export function PredictionCard({
         </section>
       ) : null}
 
-      <footer className="mt-5 flex items-center justify-between gap-3 border-t border-slate-200 pt-4">
-        <p className="min-w-0 truncate text-xs text-slate-500">예측 ID · {prediction.id}</p>
+      <footer className={`mt-5 flex items-center gap-3 border-t border-slate-200 pt-4 ${isSummaryCard ? "justify-end" : "justify-between"}`}>
+        {!isSummaryCard && (
+          <p className="min-w-0 truncate text-xs text-slate-500">예측 ID · {prediction.id}</p>
+        )}
         <Link
           href={href}
           className="inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-xl px-3 text-sm font-bold text-action transition-colors hover:bg-blue-50"

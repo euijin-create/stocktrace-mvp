@@ -208,6 +208,7 @@ export default function HomePage() {
               return (
                 <FactCheckCard
                   key={view.factCheck.id}
+                  variant="home"
                   href={view.href}
                   statement={view.statement.text}
                   influencer={view.influencer.displayName}
@@ -241,7 +242,7 @@ export default function HomePage() {
             return (
               <PredictionCard
                 key={prediction.id}
-                compact
+                variant="home"
                 href={`/predictions/${prediction.id}`}
                 influencerName={influencer.displayName}
                 stockName={stock.name}

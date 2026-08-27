@@ -1,10 +1,12 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import type { ReactNode } from "react";
 import {
   AlertTriangle,
   ArrowRight,
   CheckCircle2,
+  ChevronDown,
   ChevronRight,
   CircleDot,
   Eye,
@@ -139,11 +141,9 @@ export default async function InfluencerProfilePage({ params }: PageProps) {
           </div>
           <p className="hidden text-xs text-muted sm:block">단일 종합점수는 제공하지 않습니다</p>
         </div>
-        <div className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <div className="mt-4 grid gap-3 sm:grid-cols-2">
           <SummaryCount icon={Quote} label="분석된 전체 발언" value={`${metrics.analyzedStatements}건`} />
           <SummaryCount icon={FileCheck2} label="사실 확인 대상" value={`${metrics.factCheckEligible}건`} />
-          <SummaryCount icon={Target} label="기록된 미래 예측" value={`${metrics.predictionsRecorded}건`} />
-          <SummaryCount icon={CheckCircle2} label="평가 완료 예측" value={`${metrics.predictionsCompleted}건`} />
         </div>
       </section>
 
@@ -154,60 +154,83 @@ export default async function InfluencerProfilePage({ params }: PageProps) {
           <p className="mt-2 text-sm leading-6 text-muted">각 지표의 분모와 의미가 다르므로 서로 독립적으로 살펴보세요.</p>
         </div>
 
-        <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          <MetricCard
+        <div className="mt-5 grid gap-4 lg:grid-cols-3 lg:items-start">
+          <MetricGroup
             icon={ShieldCheck}
-            label="공식자료와 일치한 비율"
-            value={formatRatioPercent(metrics.officialAgreement)}
-            detail={`${formatRatio(metrics.officialAgreement)}건 · 팩트체크 대상 기준`}
-            progress={ratioToPercent(metrics.officialAgreement) ?? 0}
+            title="정보 신뢰성"
+            description="사실 확인 결과와 출처 표현을 함께 확인합니다."
+            primaryLabel="공식자료와 일치한 비율"
+            primaryValue={formatRatioPercent(metrics.officialAgreement)}
+            primaryDetail={`${formatRatio(metrics.officialAgreement)}건 · 팩트체크 대상 기준`}
+            detailLabel="출처·표현 세부 지표"
             tone="emerald"
-          />
-          <MetricCard
-            icon={TrendingUp}
-            label="평균 시장 대비 예측 성과"
-            value={formatPercentPoint(metrics.predictionPerformance.averageExcessReturnPct)}
-            detail={`실제 평균 ${formatPercent(metrics.predictionPerformance.averageActualReturnPct)} · 시장 ${formatPercent(metrics.predictionPerformance.averageBenchmarkReturnPct)}`}
-            tone="blue"
-          />
-          <MetricCard
-            icon={Target}
-            label="목표 도달 예측"
-            value={formatRatioPercent(metrics.predictionPerformance.targetReached)}
-            detail={`${formatRatio(metrics.predictionPerformance.targetReached)}건 · 완료 예측 기준`}
-            progress={ratioToPercent(metrics.predictionPerformance.targetReached) ?? 0}
-            tone="brand"
-          />
-          <MetricCard
-            icon={FileCheck2}
-            label="출처 제시 수준"
-            value={formatRatioPercent(metrics.sourceCitation)}
-            detail={`${formatRatio(metrics.sourceCitation)}건에서 출처 표현 관찰`}
-            progress={ratioToPercent(metrics.sourceCitation) ?? 0}
-            tone="blue"
-          />
-          <MetricCard
-            icon={Scale}
-            label="이해관계 공개 여부"
-            value={formatRatioPercent(metrics.interestDisclosure)}
-            detail={`관련 표본 ${metrics.interestDisclosure.denominator}건 중 ${metrics.interestDisclosure.numerator}건 공개`}
-            progress={ratioToPercent(metrics.interestDisclosure) ?? 0}
-            tone="emerald"
-          />
-          <MetricCard
-            icon={Megaphone}
-            label="과장 표현 사용 정도"
-            value={formatRatioPercent(metrics.exaggerationFlags)}
-            detail={`${formatRatio(metrics.exaggerationFlags)}건에서 맥락 확인 필요 표현 관찰`}
-            progress={ratioToPercent(metrics.exaggerationFlags) ?? 0}
-            tone="amber"
-          />
-        </div>
+          >
+            <MetricCard
+              icon={FileCheck2}
+              label="출처 제시 수준"
+              value={formatRatioPercent(metrics.sourceCitation)}
+              detail={`${formatRatio(metrics.sourceCitation)}건에서 출처 표현 관찰`}
+              progress={ratioToPercent(metrics.sourceCitation) ?? 0}
+              tone="blue"
+            />
+            <MetricCard
+              icon={Megaphone}
+              label="과장 표현 사용 정도"
+              value={formatRatioPercent(metrics.exaggerationFlags)}
+              detail={`${formatRatio(metrics.exaggerationFlags)}건에서 맥락 확인 필요 표현 관찰`}
+              progress={ratioToPercent(metrics.exaggerationFlags) ?? 0}
+              tone="amber"
+            />
+          </MetricGroup>
 
-        <div className="mt-4 grid gap-4 sm:grid-cols-3">
-          <HistoryMetric icon={History} label="콘텐츠 수정 이력" value={`${metrics.contentHistory.modified}건`} description="기록 후 수정 상태가 관찰된 콘텐츠" />
-          <HistoryMetric icon={Eye} label="삭제·접근 불가 이력" value={`${metrics.contentHistory.deletedOrUnavailable}건`} description="원본 URL의 객관적인 접근 상태" />
-          <HistoryMetric icon={FilePenLine} label="정정 이력" value={`${metrics.corrections}건`} description="이후 정정 표현이 확인된 콘텐츠" />
+          <MetricGroup
+            icon={TrendingUp}
+            title="예측 성과"
+            description="완료된 예측을 시장 결과와 분리해 살펴봅니다."
+            primaryLabel="평균 시장 대비 예측 성과"
+            primaryValue={formatPercentPoint(metrics.predictionPerformance.averageExcessReturnPct)}
+            primaryDetail={`실제 평균 ${formatPercent(metrics.predictionPerformance.averageActualReturnPct)} · 시장 ${formatPercent(metrics.predictionPerformance.averageBenchmarkReturnPct)}`}
+            detailLabel="예측 표본·도달 지표"
+            tone="blue"
+          >
+            <MetricCard
+              icon={Target}
+              label="기록된 미래 예측"
+              value={`${metrics.predictionsRecorded}건`}
+              detail="평가조건 충족 여부와 관계없이 기록된 전체 예측"
+              tone="brand"
+            />
+            <MetricCard
+              icon={CheckCircle2}
+              label="평가 완료 예측"
+              value={`${metrics.predictionsCompleted}건`}
+              detail="예측기간이 끝나 실제 결과와 비교된 표본"
+              tone="emerald"
+            />
+            <MetricCard
+              icon={Target}
+              label="목표 도달 비율"
+              value={formatRatioPercent(metrics.predictionPerformance.targetReached)}
+              detail={`${formatRatio(metrics.predictionPerformance.targetReached)}건 · 완료 예측 기준`}
+              progress={ratioToPercent(metrics.predictionPerformance.targetReached) ?? 0}
+              tone="brand"
+            />
+          </MetricGroup>
+
+          <MetricGroup
+            icon={Scale}
+            title="투명성 및 기록"
+            description="공개된 이해관계와 콘텐츠의 객관적 변경 이력을 봅니다."
+            primaryLabel="이해관계 공개 여부"
+            primaryValue={formatRatioPercent(metrics.interestDisclosure)}
+            primaryDetail={`관련 표본 ${metrics.interestDisclosure.denominator}건 중 ${metrics.interestDisclosure.numerator}건 공개`}
+            detailLabel="콘텐츠 변경·정정 이력"
+            tone="emerald"
+          >
+            <HistoryMetric icon={History} label="콘텐츠 수정 이력" value={`${metrics.contentHistory.modified}건`} description="기록 후 수정 상태가 관찰된 콘텐츠" />
+            <HistoryMetric icon={Eye} label="삭제·비공개 이력" value={`${metrics.contentHistory.deletedOrUnavailable}건`} description="원본 URL의 객관적인 접근 상태" />
+            <HistoryMetric icon={FilePenLine} label="정정 이력" value={`${metrics.corrections}건`} description="이후 정정 표현이 확인된 콘텐츠" />
+          </MetricGroup>
         </div>
       </section>
 
@@ -334,6 +357,68 @@ function SummaryCount({ icon: Icon, label, value }: { icon: typeof Quote; label:
       <span className="flex size-9 items-center justify-center rounded-xl bg-[#e8f2f2] text-brand"><Icon aria-hidden="true" className="size-4.5" /></span>
       <p className="mt-4 text-xs font-semibold leading-5 text-muted">{label}</p>
       <p className="number-tabular mt-1 text-2xl font-black tracking-[-0.03em] text-ink">{value}</p>
+    </article>
+  );
+}
+
+type MetricGroupTone = "brand" | "blue" | "emerald";
+
+const metricGroupTones: Record<MetricGroupTone, { icon: string; value: string }> = {
+  brand: { icon: "bg-[#e7f1f2] text-brand", value: "text-brand" },
+  blue: { icon: "bg-blue-50 text-blue-700", value: "text-blue-700" },
+  emerald: { icon: "bg-emerald-50 text-emerald-700", value: "text-emerald-700" },
+};
+
+function MetricGroup({
+  icon: Icon,
+  title,
+  description,
+  primaryLabel,
+  primaryValue,
+  primaryDetail,
+  detailLabel,
+  tone,
+  children,
+}: {
+  icon: typeof ShieldCheck;
+  title: string;
+  description: string;
+  primaryLabel: string;
+  primaryValue: string;
+  primaryDetail: string;
+  detailLabel: string;
+  tone: MetricGroupTone;
+  children: ReactNode;
+}) {
+  const toneStyle = metricGroupTones[tone];
+
+  return (
+    <article className="surface-card overflow-hidden">
+      <div className="p-5">
+        <div className="flex items-start gap-3">
+          <span className={`flex size-10 shrink-0 items-center justify-center rounded-xl ${toneStyle.icon}`}>
+            <Icon aria-hidden="true" className="size-5" />
+          </span>
+          <div>
+            <h3 className="text-base font-black text-ink">{title}</h3>
+            <p className="mt-1 text-xs leading-5 text-muted">{description}</p>
+          </div>
+        </div>
+
+        <div className="mt-5 rounded-2xl bg-slate-50 p-4">
+          <p className="text-xs font-bold text-slate-600">{primaryLabel}</p>
+          <p className={`number-tabular mt-2 text-3xl font-black tracking-[-0.035em] ${toneStyle.value}`}>{primaryValue}</p>
+          <p className="mt-1.5 text-xs leading-5 text-muted">{primaryDetail}</p>
+        </div>
+      </div>
+
+      <details className="group border-t border-line">
+        <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between gap-3 px-5 text-sm font-extrabold text-ink transition hover:bg-slate-50 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-action [&::-webkit-details-marker]:hidden">
+          <span>{detailLabel}</span>
+          <ChevronDown aria-hidden="true" className="size-4 text-muted transition-transform group-open:rotate-180" />
+        </summary>
+        <div className="grid gap-3 border-t border-line bg-slate-50/70 p-4">{children}</div>
+      </details>
     </article>
   );
 }

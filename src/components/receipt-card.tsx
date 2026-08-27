@@ -101,6 +101,14 @@ const CLAIM_TYPE_LABELS: Record<string, string> = {
   conflict_disclosure: "이해관계 관련 표현",
 };
 
+const HISTORY_STATUS_LABELS: Record<ReceiptHistoryType, string> = {
+  captured: "기록됨",
+  modified: "수정 확인",
+  made_private: "비공개 확인",
+  deleted: "접근 불가 확인",
+  restored: "공개 복원 확인",
+};
+
 function formatMoney(money: ReceiptMoney) {
   try {
     return new Intl.NumberFormat("ko-KR", {
@@ -138,6 +146,8 @@ export function ReceiptCard({ receipt, className = "" }: ReceiptCardProps) {
   const stockLabel = snapshot.stockName
     ? `${snapshot.stockName}${snapshot.stockSymbol ? ` · ${snapshot.stockSymbol}` : ""}`
     : "종목 미특정";
+  const lastObservedAt =
+    receipt.history[receipt.history.length - 1]?.observedAt ?? receipt.recordedAt;
 
   return (
     <article
@@ -240,27 +250,54 @@ export function ReceiptCard({ receipt, className = "" }: ReceiptCardProps) {
         </div>
 
         {receipt.history.length > 0 ? (
-          <ol className="mt-4 space-y-4">
-            {receipt.history.map((item) => (
-              <li key={item.id} className="relative flex min-w-0 gap-3">
-                <span className="mt-0.5 grid size-8 shrink-0 place-items-center rounded-full bg-slate-100 text-slate-600">
+          <ol className="relative mt-5">
+            {receipt.history.map((item, index) => (
+              <li
+                key={item.id}
+                className="relative grid min-w-0 grid-cols-[2rem_minmax(0,1fr)] gap-3 pb-5"
+              >
+                <span
+                  aria-hidden="true"
+                  className="absolute -bottom-4 left-[15px] top-8 w-px bg-slate-200"
+                />
+                <span className="z-10 grid size-8 place-items-center rounded-full border border-slate-200 bg-white text-slate-600 shadow-sm">
                   <HistoryIcon type={item.type} />
                 </span>
-                <div className="min-w-0 flex-1 pb-1">
-                  <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-                    <p className="break-words text-sm font-semibold text-slate-900">
-                      {item.title}
-                    </p>
-                    <time className="number-tabular shrink-0 text-xs text-slate-500">
+                <div className="min-w-0 rounded-xl border border-slate-200 bg-slate-50/70 px-4 py-3.5">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span className="rounded-full bg-white px-2.5 py-1 text-[11px] font-bold text-slate-600 ring-1 ring-inset ring-slate-200">
+                      {index + 1}단계 · {HISTORY_STATUS_LABELS[item.type]}
+                    </span>
+                    <time className="number-tabular shrink-0 text-xs font-medium text-slate-500">
                       {item.observedAt}
                     </time>
                   </div>
+                  <p className="mt-2.5 break-words text-sm font-extrabold text-slate-900">
+                    {item.title}
+                  </p>
                   <p className="mt-1 break-words text-sm leading-6 text-slate-600">
                     {item.description}
                   </p>
                 </div>
               </li>
             ))}
+            <li className="relative grid min-w-0 grid-cols-[2rem_minmax(0,1fr)] gap-3">
+              <span className="z-10 grid size-8 place-items-center rounded-full border border-brand/30 bg-[#eaf4f2] text-brand shadow-sm">
+                <StatusIcon aria-hidden="true" className="size-4" />
+              </span>
+              <div className="min-w-0 rounded-xl border border-brand/20 bg-[#f4f9f8] px-4 py-3.5">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="rounded-full bg-white px-2.5 py-1 text-[11px] font-bold text-brand ring-1 ring-inset ring-brand/20">
+                    현재 상태
+                  </span>
+                  <time className="number-tabular shrink-0 text-xs font-medium text-slate-500">
+                    마지막 확인 · {lastObservedAt}
+                  </time>
+                </div>
+                <p className="mt-2.5 text-sm font-extrabold text-slate-900">{status.label}</p>
+                <p className="mt-1 text-sm leading-6 text-slate-600">{status.description}</p>
+              </div>
+            </li>
           </ol>
         ) : (
           <p className="mt-3 text-sm text-slate-500">기록된 변경 이력이 없습니다.</p>

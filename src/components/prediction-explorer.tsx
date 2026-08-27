@@ -100,6 +100,7 @@ export function PredictionExplorer() {
                 </p>
               )}
               <PredictionCard
+                variant="list"
                 href={
                   focused && analysisInput
                     ? appendAnalysisInput(`/predictions/${prediction.id}`, analysisInput)
