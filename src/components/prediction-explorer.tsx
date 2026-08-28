@@ -6,6 +6,7 @@ import { AlertTriangle, CheckCircle2, Clock3, Layers3 } from "lucide-react";
 import { AnalysisInputSummary } from "@/components/analysis-input-summary";
 import { PredictionCard } from "@/components/prediction-card";
 import { mockDatabase } from "@/data/mock-data";
+import { getPredictionAnalysisOverrides } from "@/lib/ai/prediction-overrides";
 import { appendAnalysisInput, readAnalysisInput } from "@/lib/mock-analysis";
 import { formatKoreanDate, getPredictionView } from "@/lib/stocktrace";
 import type { PredictionStatus } from "@/types/stocktrace";
@@ -57,7 +58,16 @@ export function PredictionExplorer() {
 
   return (
     <div>
-      {analysisInput && <AnalysisInputSummary input={analysisInput} className="mb-6" />}
+      {analysisInput && (
+        <div className="mb-6">
+          <AnalysisInputSummary input={analysisInput} />
+          {analysisInput.structuredAnalysis && (
+            <p className="mt-2 rounded-xl border border-blue-100 bg-blue-50/70 px-3.5 py-2.5 text-xs font-semibold leading-5 text-blue-900">
+              {analysisInput.analysisMode === "ai" ? "AI 실제 분석" : "데모 분석"}에서 추출한 예측 조건을 카드에 반영했습니다. 발언 당시 주가와 사후 평가는 데모 데이터입니다.
+            </p>
+          )}
+        </div>
+      )}
       <div className="surface-card flex gap-2 overflow-x-auto p-2" role="group" aria-label="예측 상태 필터">
         {filters.map((item) => {
           const active = filter === item.id;
@@ -86,8 +96,9 @@ export function PredictionExplorer() {
 
       <div className="mt-6 space-y-5">
         {filtered.map(({ prediction, statement, influencer, stock }) => {
-          const evaluation = prediction.evaluation;
           const focused = focusId === prediction.id;
+          const overrides = focused ? getPredictionAnalysisOverrides(analysisInput) : null;
+          const evaluation = overrides ? undefined : prediction.evaluation;
           return (
             <div
               key={prediction.id}
@@ -101,15 +112,19 @@ export function PredictionExplorer() {
               )}
               <PredictionCard
                 variant="list"
+                analysisMode={focused ? analysisInput?.analysisMode : undefined}
                 href={
                   focused && analysisInput
                     ? appendAnalysisInput(`/predictions/${prediction.id}`, analysisInput)
                     : `/predictions/${prediction.id}`
                 }
                 influencerName={focused && analysisInput ? analysisInput.influencerName : influencer.displayName}
-                stockName={stock.name}
-                stockSymbol={`${stock.market} · ${stock.symbol}`}
+                stockName={overrides?.stockLabel ?? stock.name}
+                stockSymbol={overrides?.stockLabel ? undefined : `${stock.market} · ${stock.symbol}`}
                 originalText={focused && analysisInput ? analysisInput.statement : statement.text}
+                statementType={
+                  focused ? analysisInput?.structuredAnalysis?.statementType : undefined
+                }
                 prediction={{
                   id: prediction.id,
                   statedAt: formatKoreanDate(prediction.statedAt),
@@ -117,13 +132,13 @@ export function PredictionExplorer() {
                     ...prediction.priceAtStatement,
                     capturedAt: formatKoreanDate(prediction.priceAtStatement.capturedAt),
                   },
-                  direction: prediction.direction,
-                  targetReturnPct: prediction.targetReturnPct,
-                  targetPrice: prediction.targetPrice,
-                  horizonLabel: prediction.horizonLabel,
+                  direction: overrides ? overrides.direction : prediction.direction,
+                  targetReturnPct: overrides ? overrides.targetReturnPct : prediction.targetReturnPct,
+                  targetPrice: overrides ? overrides.targetPrice : prediction.targetPrice,
+                  horizonLabel: overrides ? overrides.horizonLabel : prediction.horizonLabel,
                   evaluationDueAt: prediction.evaluationDueAt ? formatKoreanDate(prediction.evaluationDueAt) : undefined,
-                  missingConditions: prediction.missingConditions,
-                  status: prediction.status,
+                  missingConditions: overrides ? overrides.missingConditions : prediction.missingConditions,
+                  status: overrides ? overrides.status : prediction.status,
                   evaluation:
                     evaluation && evaluation.targetReached !== null
                       ? {

@@ -3,10 +3,13 @@ import Link from "next/link";
 import { Suspense } from "react";
 import { ChevronRight, LoaderCircle, ShieldCheck } from "lucide-react";
 import { AnalysisWorkspace } from "@/components/analysis-workspace";
+import { hasGeminiApiKey } from "@/lib/ai/config";
+
+export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
   title: "콘텐츠 분석",
-  description: "주식 콘텐츠의 발언을 입력하고 StockTrace의 데모 분석 흐름을 체험해 보세요.",
+  description: "주식 콘텐츠의 발언을 구조화하고 StockTrace의 분석 흐름을 확인해 보세요.",
 };
 
 function WorkspaceFallback() {
@@ -21,6 +24,8 @@ function WorkspaceFallback() {
 }
 
 export default function AnalyzePage() {
+  const initialMode = hasGeminiApiKey() ? "ai" : "demo";
+
   return (
     <main className="mx-auto w-full max-w-6xl px-4 pb-16 pt-6 sm:px-6 sm:pt-10 lg:px-8">
       <nav aria-label="현재 위치" className="flex items-center gap-1.5 text-xs font-semibold text-muted">
@@ -43,12 +48,12 @@ export default function AnalyzePage() {
         </div>
         <span className="inline-flex w-fit items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-800">
           <ShieldCheck aria-hidden="true" className="size-4" />
-          입력값 외부 전송 없음
+          {initialMode === "ai" ? "발언 텍스트만 AI 분석" : "데모 분석 모드"}
         </span>
       </div>
 
       <Suspense fallback={<WorkspaceFallback />}>
-        <AnalysisWorkspace />
+        <AnalysisWorkspace initialMode={initialMode} />
       </Suspense>
     </main>
   );

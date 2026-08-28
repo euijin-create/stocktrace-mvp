@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import {
   ArrowRight,
   BadgeCheck,
@@ -19,21 +19,23 @@ import {
   Sparkles,
   UserRound,
 } from "lucide-react";
+import { AiStatementClassification } from "@/components/ai-statement-classification";
 import { AnalysisInputSummary } from "@/components/analysis-input-summary";
 import { demoScenarios } from "@/data/mock-data";
+import { toAnalysisViewModel, type AnalyzedStatementView } from "@/lib/ai/analysis-view-model";
+import { parseStockContentAnalysis } from "@/lib/ai/schema";
+import type { AnalysisMode } from "@/lib/ai/types";
 import {
-  analyzeContentWithMock,
-  analyzeStatementsWithMock,
   appendAnalysisInput,
   readAnalysisInput,
   type ContentAnalysisInput,
-  type MockAnalyzedStatement,
 } from "@/lib/mock-analysis";
 import { CLAIM_TYPE_META } from "@/lib/stocktrace";
 
-export function AnalysisWorkspace() {
+export function AnalysisWorkspace({ initialMode }: { initialMode: AnalysisMode }) {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const submittingRef = useRef(false);
   const restoredInput = useMemo(
     () => readAnalysisInput((key) => searchParams.get(key)),
     [searchParams],
@@ -44,20 +46,11 @@ export function AnalysisWorkspace() {
   const [statement, setStatement] = useState(restoredInput?.statement ?? "");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const [results, setResults] = useState<MockAnalyzedStatement[]>(() => {
-    if (!restoredInput) return [];
-    const restoredResults = analyzeStatementsWithMock(restoredInput.statement);
-    return restoredResults.length > 1 || restoredResults[0]?.analysis.kind === "opinion"
-      ? restoredResults
-      : [];
-  });
-  const [analyzedInput, setAnalyzedInput] = useState<ContentAnalysisInput | null>(() => {
-    if (!restoredInput) return null;
-    const restoredResults = analyzeStatementsWithMock(restoredInput.statement);
-    return restoredResults.length > 1 || restoredResults[0]?.analysis.kind === "opinion"
-      ? restoredInput
-      : null;
-  });
+  const [analysisMode, setAnalysisMode] = useState<AnalysisMode>(
+    restoredInput?.analysisMode ?? initialMode,
+  );
+  const [results, setResults] = useState<AnalyzedStatementView[]>([]);
+  const [analyzedInput, setAnalyzedInput] = useState<ContentAnalysisInput | null>(null);
   const submittedInput = useMemo<ContentAnalysisInput>(
     () => ({
       contentUrl: url.trim(),
@@ -77,10 +70,12 @@ export function AnalysisWorkspace() {
     setError("");
     setResults([]);
     setAnalyzedInput(null);
+    setAnalysisMode(initialMode);
   }
 
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (submittingRef.current) return;
     if (!url.trim() || !influencer.trim() || !statement.trim()) {
       setError("콘텐츠 URL, 인플루언서 이름, 분석할 발언을 모두 입력해 주세요.");
       return;
@@ -94,18 +89,37 @@ export function AnalysisWorkspace() {
     }
 
     setError("");
+    submittingRef.current = true;
     setLoading(true);
     setResults([]);
     setAnalyzedInput(null);
-    await new Promise((resolve) => window.setTimeout(resolve, 650));
 
     try {
-      const analysis = await analyzeContentWithMock(submittedInput);
-      const extractedStatements = analysis.statements;
+      const response = await fetch("/api/analyze", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ statement: submittedInput.statement }),
+      });
+      const payload: unknown = await response.json();
+      if (!response.ok || typeof payload !== "object" || payload === null || !("mode" in payload)) {
+        throw new Error("Analysis request failed");
+      }
+
+      const modeValue = (payload as { mode?: unknown }).mode;
+      if (modeValue !== "ai" && modeValue !== "demo") throw new Error("Invalid analysis mode");
+      const mode: AnalysisMode = modeValue;
+      const structured = parseStockContentAnalysis(payload, submittedInput.statement);
+      const extractedStatements = toAnalysisViewModel({ ...structured, mode });
       const onlyStatement = extractedStatements.length === 1 ? extractedStatements[0] : null;
+      setAnalysisMode(mode);
 
       if (onlyStatement?.analysis.destinationHref) {
-        const selectedInput = { ...submittedInput, statement: onlyStatement.statement };
+        const selectedInput = {
+          ...submittedInput,
+          statement: onlyStatement.statement,
+          analysisMode: mode,
+          structuredAnalysis: onlyStatement.analysis.structuredAnalysis,
+        };
         router.push(
           appendAnalysisInput(onlyStatement.analysis.destinationHref, selectedInput),
         );
@@ -113,15 +127,18 @@ export function AnalysisWorkspace() {
       }
 
       setResults(extractedStatements);
-      setAnalyzedInput(submittedInput);
-      setLoading(false);
-      router.replace(appendAnalysisInput("/analyze", submittedInput), { scroll: false });
+      const completedInput = { ...submittedInput, analysisMode: mode };
+      setAnalyzedInput(completedInput);
+      router.replace(appendAnalysisInput("/analyze", completedInput), { scroll: false });
       window.requestAnimationFrame(() => {
         document.getElementById("analysis-result")?.scrollIntoView({ behavior: "smooth", block: "start" });
       });
-    } catch {
+    } catch (analysisError) {
+      console.error("[StockTrace] Analysis request failed", analysisError);
+      setError("AI 분석을 완료하지 못했습니다. 잠시 후 다시 시도해 주세요.");
+    } finally {
+      submittingRef.current = false;
       setLoading(false);
-      setError("데모 분석 중 문제가 발생했습니다. 잠시 후 다시 시도해 주세요.");
     }
   }
 
@@ -137,7 +154,11 @@ export function AnalysisWorkspace() {
               <h2 id="analysis-form-title" className="text-lg font-black tracking-[-0.02em] text-ink">
                 분석할 내용을 알려주세요
               </h2>
-              <p className="mt-1 text-sm leading-6 text-muted">입력한 발언은 저장되거나 외부로 전송되지 않습니다.</p>
+              <p className="mt-1 text-sm leading-6 text-muted">
+                {initialMode === "ai"
+                  ? "콘텐츠 URL과 인플루언서 이름은 전송하지 않고, 발언 텍스트만 AI 분석에 사용합니다."
+                  : "API 키가 없어 발언을 외부로 전송하지 않는 데모 분석으로 동작합니다."}
+              </p>
             </div>
           </div>
         </div>
@@ -213,12 +234,12 @@ export function AnalysisWorkspace() {
             {loading ? (
               <>
                 <LoaderCircle aria-hidden="true" className="size-4 animate-spin" />
-                발언 구조를 살펴보는 중…
+                발언을 분석하고 있습니다
               </>
             ) : (
               <>
                 <Sparkles aria-hidden="true" className="size-4" />
-                가상 AI 분석하기
+                {initialMode === "ai" ? "AI 분석하기" : "데모 분석하기"}
               </>
             )}
           </button>
@@ -265,9 +286,13 @@ export function AnalysisWorkspace() {
           <div className="flex gap-3">
             <Info aria-hidden="true" className="mt-0.5 size-5 shrink-0 text-action" />
             <div>
-              <h2 className="text-sm font-extrabold text-ink">현재는 키워드 기반 데모입니다</h2>
+              <h2 className="text-sm font-extrabold text-ink">
+                {initialMode === "ai" ? "Gemini가 발언을 구조화합니다" : "현재는 데모 분석 모드입니다"}
+              </h2>
               <p className="mt-1.5 text-xs leading-5 text-slate-600">
-                실제 AI나 콘텐츠 수집 API는 연결하지 않았습니다. 입력값은 화면 흐름을 보여주는 분류 미리보기에만 반영됩니다.
+                {initialMode === "ai"
+                  ? "문장 분리·분류·기업명과 예측 조건 추출을 한 번의 요청으로 처리합니다. 공식자료와 주가 결과는 아직 데모 데이터입니다."
+                  : "Gemini API 키를 설정하면 실제 AI 분석으로 전환됩니다. 지금은 기존 mock 규칙으로 안전하게 체험할 수 있습니다."}
               </p>
             </div>
           </div>
@@ -281,7 +306,7 @@ export function AnalysisWorkspace() {
               <span className="mx-auto flex size-12 items-center justify-center rounded-2xl bg-[#e8f2f2] text-brand">
                 <LoaderCircle aria-hidden="true" className="size-6 animate-spin" />
               </span>
-              <p className="mt-4 font-extrabold text-ink">발언에서 검증 가능한 단서를 찾고 있어요</p>
+              <p className="mt-4 font-extrabold text-ink">발언을 분석하고 있습니다</p>
               <p className="mt-1.5 text-sm text-muted">종목 · 수치 · 기간 · 출처 표현을 분리합니다.</p>
             </div>
           </div>
@@ -295,7 +320,9 @@ export function AnalysisWorkspace() {
                   <Check aria-hidden="true" className="size-5" strokeWidth={2.6} />
                 </span>
                 <div>
-                  <p className="text-xs font-bold text-emerald-700">데모 분석 완료</p>
+                  <p className="text-xs font-bold text-emerald-700">
+                    {analysisMode === "ai" ? "AI 분석 완료" : "데모 분석 완료"}
+                  </p>
                   <h2 id="multi-result-title" className="mt-0.5 text-xl font-black tracking-[-0.02em] text-ink">
                     추출된 핵심 발언 {results.length}개
                   </h2>
@@ -303,7 +330,7 @@ export function AnalysisWorkspace() {
               </div>
               <span className="inline-flex w-fit items-center gap-1.5 rounded-full border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-bold text-blue-700">
                 <Sparkles aria-hidden="true" className="size-3.5" />
-                문장 단위 mock 분석
+                {analysisMode === "ai" ? "AI 실제 분석" : "데모 분석 모드"}
               </span>
             </div>
 
@@ -312,7 +339,12 @@ export function AnalysisWorkspace() {
 
               <ol className="mt-5 space-y-4">
                 {results.map(({ id, statement: extractedStatement, analysis }, index) => {
-                  const selectedInput = { ...resultInput, statement: extractedStatement };
+                  const selectedInput = {
+                    ...resultInput,
+                    statement: extractedStatement,
+                    analysisMode,
+                    structuredAnalysis: analysis.structuredAnalysis,
+                  };
                   const isFact = analysis.kind === "fact";
                   const isPrediction =
                     analysis.kind === "prediction" || analysis.kind === "insufficient_prediction";
@@ -334,13 +366,22 @@ export function AnalysisWorkspace() {
                           </span>
                         </div>
                         <span className="text-xs font-semibold text-muted">
-                          분류 신뢰수준 {analysis.confidence}%
+                          {analysis.confidence === undefined
+                            ? "AI 구조화 분석"
+                            : `분류 신뢰수준 ${analysis.confidence}%`}
                         </span>
                       </div>
 
                       <blockquote className="mt-4 text-base font-extrabold leading-7 tracking-[-0.01em] text-ink">
                         “{extractedStatement}”
                       </blockquote>
+
+                      <AiStatementClassification
+                        className="mt-4"
+                        compact
+                        mode={analysisMode}
+                        statementType={analysis.structuredAnalysis.statementType}
+                      />
 
                       <div className="mt-4 grid gap-2.5 sm:grid-cols-3">
                         {[
@@ -356,7 +397,7 @@ export function AnalysisWorkspace() {
                       </div>
 
                       {analysis.predictionDetails && (
-                        <dl className="mt-3 grid gap-2.5 sm:grid-cols-3">
+                        <dl className="mt-3 grid gap-2.5 sm:grid-cols-2 lg:grid-cols-4">
                           <div className="rounded-xl border border-blue-100 bg-blue-50/70 px-3.5 py-3">
                             <dt className="text-[11px] font-semibold text-slate-600">방향</dt>
                             <dd className="mt-1 text-sm font-extrabold text-ink">
@@ -367,6 +408,12 @@ export function AnalysisWorkspace() {
                             <dt className="text-[11px] font-semibold text-slate-600">목표 수익률</dt>
                             <dd className="mt-1 text-sm font-extrabold text-ink">
                               {analysis.predictionDetails.targetReturnLabel ?? "조건 없음"}
+                            </dd>
+                          </div>
+                          <div className="rounded-xl border border-blue-100 bg-blue-50/70 px-3.5 py-3">
+                            <dt className="text-[11px] font-semibold text-slate-600">목표가격</dt>
+                            <dd className="mt-1 text-sm font-extrabold text-ink">
+                              {analysis.predictionDetails.targetPriceLabel ?? "조건 없음"}
                             </dd>
                           </div>
                           <div className="rounded-xl border border-blue-100 bg-blue-50/70 px-3.5 py-3">
@@ -400,7 +447,11 @@ export function AnalysisWorkspace() {
                         ) : (
                           <span className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-line bg-slate-50 px-4 text-sm font-bold text-muted">
                             <MessageSquareText aria-hidden="true" className="size-4" />
-                            개인 의견으로 분류됨
+                            {analysis.kind === "opinion"
+                              ? "개인 의견으로 분류됨"
+                              : analysis.kind === "context_risk"
+                                ? "추가 맥락 확인 필요"
+                                : "이해관계 관련 표현 기록"}
                           </span>
                         )}
                       </div>
@@ -410,7 +461,9 @@ export function AnalysisWorkspace() {
               </ol>
 
               <p className="mt-4 text-xs leading-5 text-muted">
-                문장 분리와 분류는 준비된 키워드 규칙을 사용합니다. 카드를 선택하면 해당 발언 한 개만 기존 결과 화면에 반영됩니다.
+                {analysisMode === "ai"
+                  ? "발언 분리와 구조화는 Gemini가 수행했습니다. 카드를 선택하면 해당 발언 한 개만 기존 결과 화면에 반영됩니다."
+                  : "API 키가 없어 준비된 mock 규칙으로 분석했습니다. 카드를 선택하면 해당 발언 한 개만 기존 결과 화면에 반영됩니다."}
               </p>
             </div>
           </section>
@@ -424,7 +477,9 @@ export function AnalysisWorkspace() {
                   <Check aria-hidden="true" className="size-5" strokeWidth={2.6} />
                 </span>
                 <div>
-                  <p className="text-xs font-bold text-emerald-700">데모 분석 완료</p>
+                  <p className="text-xs font-bold text-emerald-700">
+                    {analysisMode === "ai" ? "AI 분석 완료" : "데모 분석 완료"}
+                  </p>
                   <h2 id="result-title" className="mt-0.5 text-xl font-black tracking-[-0.02em] text-ink">
                     발언의 기록 경로를 찾았습니다
                   </h2>
@@ -432,12 +487,20 @@ export function AnalysisWorkspace() {
               </div>
               <span className="inline-flex w-fit items-center gap-1.5 rounded-full border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-bold text-blue-700">
                 <Sparkles aria-hidden="true" className="size-3.5" />
-                AI 분류 신뢰수준 {result.confidence}%
+                {result.confidence === undefined
+                  ? "AI 실제 분석"
+                  : `데모 분류 신뢰수준 ${result.confidence}%`}
               </span>
             </div>
 
             <div className="p-5 sm:p-7">
               <AnalysisInputSummary input={resultInput} />
+
+              <AiStatementClassification
+                className="mt-5"
+                mode={analysisMode}
+                statementType={result.structuredAnalysis.statementType}
+              />
 
               <div className="mt-5 grid gap-3 sm:grid-cols-3">
                 {[
@@ -497,7 +560,7 @@ export function AnalysisWorkspace() {
               </div>
 
               <p className="mt-4 text-xs leading-5 text-muted">
-                상세 근거와 주가 수치는 준비된 예시 데이터를 사용합니다. 신뢰수준은 분류 결과에 대한 값이며 발언의 진실 확률이 아닙니다.
+                발언 분석은 위 모드로 처리했으며, 상세 근거·공식자료·주가·사후 수익률은 준비된 데모 데이터를 사용합니다.
               </p>
             </div>
           </section>

@@ -1,9 +1,16 @@
 import { CLAIM_TYPE, type ClaimType } from "@/types/stocktrace";
+import { isStockDirection, isStockStatementType } from "@/lib/ai/schema";
+import type {
+  AnalysisMode,
+  StockStatementAnalysis,
+} from "@/lib/ai/types";
 
 export interface ContentAnalysisInput {
   contentUrl: string;
   influencerName: string;
   statement: string;
+  analysisMode?: AnalysisMode;
+  structuredAnalysis?: StockStatementAnalysis;
 }
 
 export type MockAnalysisKind =
@@ -47,6 +54,18 @@ export const ANALYSIS_QUERY_KEYS = {
   contentUrl: "contentUrl",
   influencerName: "influencer",
   statement: "statement",
+  analysisMode: "analysisMode",
+  statementType: "statementType",
+  company: "company",
+  stockName: "stockName",
+  direction: "direction",
+  targetPrice: "targetPrice",
+  targetReturnPercent: "targetReturnPercent",
+  predictionPeriod: "predictionPeriod",
+  conditions: "conditions",
+  summary: "analysisSummary",
+  evaluationPossible: "evaluationPossible",
+  evaluationMissingReason: "evaluationMissingReason",
 } as const;
 
 function detectEntity(statement: string): string {
@@ -265,11 +284,54 @@ export function appendAnalysisInput(
   url.searchParams.set(ANALYSIS_QUERY_KEYS.contentUrl, input.contentUrl);
   url.searchParams.set(ANALYSIS_QUERY_KEYS.influencerName, input.influencerName);
   url.searchParams.set(ANALYSIS_QUERY_KEYS.statement, input.statement);
+  if (input.analysisMode) {
+    url.searchParams.set(ANALYSIS_QUERY_KEYS.analysisMode, input.analysisMode);
+  }
+
+  const structured = input.structuredAnalysis;
+  if (structured) {
+    url.searchParams.set(ANALYSIS_QUERY_KEYS.statementType, structured.statementType);
+    url.searchParams.set(ANALYSIS_QUERY_KEYS.company, structured.company ?? "");
+    url.searchParams.set(ANALYSIS_QUERY_KEYS.stockName, structured.stockName ?? "");
+    url.searchParams.set(ANALYSIS_QUERY_KEYS.direction, structured.direction);
+    url.searchParams.set(
+      ANALYSIS_QUERY_KEYS.targetPrice,
+      structured.targetPrice === null ? "" : String(structured.targetPrice),
+    );
+    url.searchParams.set(
+      ANALYSIS_QUERY_KEYS.targetReturnPercent,
+      structured.targetReturnPercent === null ? "" : String(structured.targetReturnPercent),
+    );
+    url.searchParams.set(ANALYSIS_QUERY_KEYS.predictionPeriod, structured.predictionPeriod ?? "");
+    url.searchParams.set(ANALYSIS_QUERY_KEYS.conditions, structured.conditions.join("\n"));
+    url.searchParams.set(ANALYSIS_QUERY_KEYS.summary, structured.summary);
+    url.searchParams.set(
+      ANALYSIS_QUERY_KEYS.evaluationPossible,
+      String(structured.evaluationPossible),
+    );
+    url.searchParams.set(
+      ANALYSIS_QUERY_KEYS.evaluationMissingReason,
+      structured.evaluationMissingReason ?? "",
+    );
+  }
   return `${url.pathname}${url.search}${url.hash}`;
 }
 
 export type AnalysisParamReader = (key: string) => string | null | undefined;
 export type AnalysisSearchParams = Record<string, string | string[] | undefined>;
+
+function readNullableNumber(value: string | null | undefined): number | null | undefined {
+  if (value === undefined || value === null) return undefined;
+  if (value === "") return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+function readNullableText(value: string | null | undefined): string | null | undefined {
+  if (value === undefined || value === null) return undefined;
+  const normalized = value.trim();
+  return normalized || null;
+}
 
 export function readAnalysisInput(read: AnalysisParamReader): ContentAnalysisInput | null {
   if (read(ANALYSIS_QUERY_KEYS.marker) !== ANALYSIS_MARKER) return null;
@@ -286,7 +348,65 @@ export function readAnalysisInput(read: AnalysisParamReader): ContentAnalysisInp
     return null;
   }
 
-  return { contentUrl, influencerName, statement };
+  const analysisModeValue = read(ANALYSIS_QUERY_KEYS.analysisMode);
+  const analysisMode: AnalysisMode | undefined =
+    analysisModeValue === "ai" || analysisModeValue === "demo"
+      ? analysisModeValue
+      : undefined;
+
+  const statementType = read(ANALYSIS_QUERY_KEYS.statementType);
+  const direction = read(ANALYSIS_QUERY_KEYS.direction);
+  const targetPrice = readNullableNumber(read(ANALYSIS_QUERY_KEYS.targetPrice));
+  const targetReturnPercent = readNullableNumber(
+    read(ANALYSIS_QUERY_KEYS.targetReturnPercent),
+  );
+  const company = readNullableText(read(ANALYSIS_QUERY_KEYS.company));
+  const stockName = readNullableText(read(ANALYSIS_QUERY_KEYS.stockName));
+  const predictionPeriod = readNullableText(read(ANALYSIS_QUERY_KEYS.predictionPeriod));
+  const summary = read(ANALYSIS_QUERY_KEYS.summary)?.trim();
+  const evaluationPossibleValue = read(ANALYSIS_QUERY_KEYS.evaluationPossible);
+  const evaluationMissingReason = readNullableText(
+    read(ANALYSIS_QUERY_KEYS.evaluationMissingReason),
+  );
+  const conditionsValue = read(ANALYSIS_QUERY_KEYS.conditions);
+
+  const hasValidStructuredAnalysis =
+    analysisMode !== undefined &&
+    isStockStatementType(statementType) &&
+    isStockDirection(direction) &&
+    targetPrice !== undefined &&
+    targetReturnPercent !== undefined &&
+    company !== undefined &&
+    stockName !== undefined &&
+    predictionPeriod !== undefined &&
+    Boolean(summary) &&
+    (evaluationPossibleValue === "true" || evaluationPossibleValue === "false") &&
+    evaluationMissingReason !== undefined &&
+    conditionsValue !== undefined &&
+    conditionsValue !== null;
+
+  const structuredAnalysis: StockStatementAnalysis | undefined = hasValidStructuredAnalysis
+    ? {
+        statementType,
+        originalStatement: statement,
+        company,
+        stockName,
+        direction,
+        targetPrice,
+        targetReturnPercent,
+        predictionPeriod,
+        conditions: conditionsValue
+          .split("\n")
+          .map((condition) => condition.trim())
+          .filter(Boolean)
+          .slice(0, 10),
+        summary: summary!,
+        evaluationPossible: evaluationPossibleValue === "true",
+        evaluationMissingReason,
+      }
+    : undefined;
+
+  return { contentUrl, influencerName, statement, analysisMode, structuredAnalysis };
 }
 
 export function readAnalysisInputFromRecord(

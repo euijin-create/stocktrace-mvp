@@ -18,11 +18,13 @@ import {
   Target,
   UserRound,
 } from "lucide-react";
+import { AiStatementClassification } from "@/components/ai-statement-classification";
 import { AnalysisInputSummary } from "@/components/analysis-input-summary";
 import { PredictionCard } from "@/components/prediction-card";
 import { DemoNotice } from "@/components/ui/demo-notice";
 import { StatusBadge, type StatusTone } from "@/components/ui/status-badge";
 import { predictions } from "@/data/mock-data";
+import { getPredictionAnalysisOverrides } from "@/lib/ai/prediction-overrides";
 import {
   appendAnalysisInput,
   readAnalysisInputFromRecord,
@@ -79,16 +81,27 @@ export default async function PredictionDetailPage({ params, searchParams }: Pag
   );
   const preserveAnalysisInput = (href: string) =>
     analysisInput ? appendAnalysisInput(href, analysisInput) : href;
-  const evaluation = prediction.evaluation;
-  const statusMeta = PREDICTION_STATUS_META[prediction.status];
-  const targetSummary = prediction.targetReturnPct !== undefined
-    ? formatPercent(prediction.targetReturnPct)
-    : prediction.targetPrice
-      ? formatMoney(prediction.targetPrice)
+  const overrides = getPredictionAnalysisOverrides(analysisInput);
+  const displayedStockName = overrides?.stockLabel ?? stock.name;
+  const displayedStockSymbol = overrides?.stockLabel ? null : `${stock.market} · ${stock.symbol}`;
+  const displayedDirection = overrides ? overrides.direction : prediction.direction;
+  const displayedTargetReturn = overrides ? overrides.targetReturnPct : prediction.targetReturnPct;
+  const displayedTargetPrice = overrides ? overrides.targetPrice : prediction.targetPrice;
+  const displayedHorizon = overrides ? overrides.horizonLabel : prediction.horizonLabel;
+  const displayedMissingConditions = overrides
+    ? overrides.missingConditions
+    : prediction.missingConditions;
+  const displayedStatus = overrides ? overrides.status : prediction.status;
+  const evaluation = overrides ? undefined : prediction.evaluation;
+  const statusMeta = PREDICTION_STATUS_META[displayedStatus];
+  const targetSummary = displayedTargetReturn !== undefined
+    ? formatPercent(displayedTargetReturn)
+    : displayedTargetPrice
+      ? formatMoney(displayedTargetPrice)
       : "조건 미지정";
   const targetDetail = [
-    prediction.targetPrice ? `목표가 ${formatMoney(prediction.targetPrice)}` : null,
-    prediction.horizonLabel ? `기간 ${prediction.horizonLabel}` : null,
+    displayedTargetPrice ? `목표가 ${formatMoney(displayedTargetPrice)}` : null,
+    displayedHorizon ? `기간 ${displayedHorizon}` : null,
   ].filter((value): value is string => Boolean(value)).join(" · ");
   const targetReachedLabel = evaluation?.targetReached === null
     ? "평가 제외"
@@ -96,20 +109,20 @@ export default async function PredictionDetailPage({ params, searchParams }: Pag
       ? "도달"
       : evaluation
         ? "미도달"
-        : prediction.status === "insufficient_conditions"
+        : displayedStatus === "insufficient_conditions"
           ? "평가 제외"
           : "평가 전";
   const cardEvaluation = evaluation && evaluation.targetReached !== null
     ? { ...evaluation, evaluatedAt: formatKoreanDate(evaluation.evaluatedAt), targetReached: evaluation.targetReached }
     : undefined;
 
-  const priceRange = evaluation && prediction.targetPrice
+  const priceRange = evaluation && displayedTargetPrice
     ? buildPriceRange(
         prediction.priceAtStatement.price.amount,
         evaluation.observedLowPrice?.amount,
         evaluation.observedHighPrice?.amount,
         evaluation.endPrice.amount,
-        prediction.targetPrice.amount,
+        displayedTargetPrice.amount,
       )
     : undefined;
 
@@ -120,7 +133,7 @@ export default async function PredictionDetailPage({ params, searchParams }: Pag
         <ChevronRight aria-hidden="true" className="size-3.5" />
         <Link href="/predictions" className="rounded-md py-1 hover:text-ink">예측 추적</Link>
         <ChevronRight aria-hidden="true" className="size-3.5" />
-        <span aria-current="page" className="text-ink">{stock.name}</span>
+        <span aria-current="page" className="text-ink">{displayedStockName}</span>
       </nav>
 
       <div className="mb-7 mt-5 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
@@ -141,9 +154,11 @@ export default async function PredictionDetailPage({ params, searchParams }: Pag
               <p className="text-xs font-extrabold tracking-[0.12em] text-brand">평가 요약</p>
               <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1">
                 <h2 id="prediction-overview-title" className="text-xl font-black tracking-[-0.025em] text-ink">
-                  {stock.name} 예측 결과
+                  {displayedStockName} 예측 결과
                 </h2>
-                <span className="text-xs font-semibold text-muted">{stock.market} · {stock.symbol}</span>
+                {displayedStockSymbol && (
+                  <span className="text-xs font-semibold text-muted">{displayedStockSymbol}</span>
+                )}
               </div>
               <Link
                 href={influencerProfileHref}
@@ -161,6 +176,13 @@ export default async function PredictionDetailPage({ params, searchParams }: Pag
           <blockquote className="mt-5 rounded-2xl border-l-4 border-brand bg-white px-5 py-4 text-base font-extrabold leading-7 text-ink sm:text-lg sm:leading-8">
             “{analysisInput?.statement ?? statement.text}”
           </blockquote>
+          {analysisInput?.structuredAnalysis ? (
+            <AiStatementClassification
+              className="mt-4"
+              mode={analysisInput.analysisMode}
+              statementType={analysisInput.structuredAnalysis.statementType}
+            />
+          ) : null}
         </div>
 
         <div className="p-5 sm:p-7">
@@ -168,12 +190,12 @@ export default async function PredictionDetailPage({ params, searchParams }: Pag
             <OverviewMetric label="예측 목표" value={targetSummary} detail={targetDetail || "목표 조건 확인 필요"} />
             <OverviewMetric
               label="실제 결과"
-              value={evaluation ? formatPercent(evaluation.actualReturnPct) : prediction.status === "insufficient_conditions" ? "평가 제외" : "평가 전"}
+              value={evaluation ? formatPercent(evaluation.actualReturnPct) : displayedStatus === "insufficient_conditions" ? "평가 제외" : "평가 전"}
               detail={evaluation ? `${formatKoreanDate(evaluation.evaluatedAt)} 기준` : statusMeta.description}
             />
             <OverviewMetric
               label="시장 대비 성과"
-              value={evaluation ? formatPercentPoint(evaluation.excessReturnPct) : prediction.status === "insufficient_conditions" ? "평가 제외" : "평가 전"}
+              value={evaluation ? formatPercentPoint(evaluation.excessReturnPct) : displayedStatus === "insufficient_conditions" ? "평가 제외" : "평가 전"}
               detail={evaluation ? `${evaluation.benchmarkName} ${formatPercent(evaluation.benchmarkReturnPct)}` : statusMeta.description}
             />
             <OverviewMetric label="목표 도달 여부" value={targetReachedLabel} detail={statusMeta.label} />
@@ -188,7 +210,16 @@ export default async function PredictionDetailPage({ params, searchParams }: Pag
         </div>
       </section>
 
-      <DemoNotice compact className="mt-4" />
+      <DemoNotice
+        compact
+        className="mt-4"
+        title={analysisInput?.analysisMode === "ai" ? "AI 분석과 데모 데이터 구분" : "데모 데이터 안내"}
+        description={
+          analysisInput?.analysisMode === "ai"
+            ? "방향·목표 수익률·목표가격·예측 기간은 Gemini가 실제 발언에서 추출했습니다. 발언 당시 주가, 시장지수와 사후 평가는 아직 데모 데이터입니다."
+            : undefined
+        }
+      />
 
       <details id="evaluation-detail" className="group surface-card mt-6 scroll-mt-24 overflow-hidden">
         <summary className="flex min-h-18 cursor-pointer list-none items-center justify-between gap-4 px-5 py-4 sm:px-6">
@@ -228,10 +259,10 @@ export default async function PredictionDetailPage({ params, searchParams }: Pag
                         </span>
                       </div>
                     ))}
-                    {prediction.targetPrice && (
+                    {displayedTargetPrice && (
                       <div className="absolute top-1/2 -translate-x-1/2 -translate-y-1/2" style={{ left: `${priceRange.target}%` }}>
                         <span className="block h-8 w-0.5 border-l-2 border-dashed border-rose-400" />
-                        <span className="absolute left-1/2 top-6 w-max -translate-x-1/2 text-center text-[10px] font-bold text-rose-700">목표가<br />{formatMoney(prediction.targetPrice)}</span>
+                        <span className="absolute left-1/2 top-6 w-max -translate-x-1/2 text-center text-[10px] font-bold text-rose-700">목표가<br />{formatMoney(displayedTargetPrice)}</span>
                       </div>
                     )}
                   </div>
@@ -272,20 +303,25 @@ export default async function PredictionDetailPage({ params, searchParams }: Pag
             <ResultNote icon={Target} title="목표가격 도달" value={evaluation.targetReached ? "도달" : "미도달"} description="기간 중 고가를 포함해 확인" />
           </div>
         </section>
-      ) : prediction.status === "insufficient_conditions" ? (
+      ) : displayedStatus === "insufficient_conditions" ? (
         <section id="evaluation-conditions" className="p-1 sm:p-2" aria-labelledby="conditions-title">
           <div className="flex items-start gap-3">
             <span className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-amber-50 text-amber-800"><AlertTriangle aria-hidden="true" className="size-5" /></span>
             <div>
               <h2 id="conditions-title" className="text-lg font-black text-ink">평가조건 불충분</h2>
               <p className="mt-1.5 text-sm leading-6 text-muted">객관적인 사후 평가를 위해 아래 조건이 더 필요합니다.</p>
+              {overrides?.evaluationMissingReason && (
+                <p className="mt-2 text-xs font-semibold leading-5 text-amber-900">
+                  {overrides.evaluationMissingReason}
+                </p>
+              )}
             </div>
           </div>
           <ul className="mt-5 grid gap-3 sm:grid-cols-3">
             {[
-              ["상승·하락 방향", !prediction.missingConditions.includes("direction")],
-              ["목표 수익률 또는 가격", !prediction.missingConditions.includes("target")],
-              ["구체적인 예측기간", !prediction.missingConditions.includes("period")],
+              ["상승·하락 방향", !displayedMissingConditions.includes("direction")],
+              ["목표 수익률 또는 가격", !displayedMissingConditions.includes("target")],
+              ["구체적인 예측기간", !displayedMissingConditions.includes("period")],
             ].map(([label, complete]) => (
               <li key={String(label)} className={`flex items-center gap-2 rounded-xl border p-4 text-sm font-bold ${complete ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-slate-200 bg-slate-50 text-slate-600"}`}>
                 <CircleDot aria-hidden="true" className="size-4 shrink-0" />
@@ -319,8 +355,8 @@ export default async function PredictionDetailPage({ params, searchParams }: Pag
           <PredictionCard
             href="#evaluation-detail"
             influencerName={displayedInfluencer}
-            stockName={stock.name}
-            stockSymbol={`${stock.market} · ${stock.symbol}`}
+            stockName={displayedStockName}
+            stockSymbol={displayedStockSymbol ?? undefined}
             originalText={analysisInput?.statement ?? statement.text}
             prediction={{
               id: prediction.id,
@@ -329,13 +365,13 @@ export default async function PredictionDetailPage({ params, searchParams }: Pag
                 ...prediction.priceAtStatement,
                 capturedAt: formatKoreanDate(prediction.priceAtStatement.capturedAt),
               },
-              direction: prediction.direction,
-              targetReturnPct: prediction.targetReturnPct,
-              targetPrice: prediction.targetPrice,
-              horizonLabel: prediction.horizonLabel,
+              direction: displayedDirection,
+              targetReturnPct: displayedTargetReturn,
+              targetPrice: displayedTargetPrice,
+              horizonLabel: displayedHorizon,
               evaluationDueAt: prediction.evaluationDueAt ? formatKoreanDate(prediction.evaluationDueAt) : undefined,
-              missingConditions: prediction.missingConditions,
-              status: prediction.status,
+              missingConditions: displayedMissingConditions,
+              status: displayedStatus,
               evaluation: cardEvaluation,
             }}
           />

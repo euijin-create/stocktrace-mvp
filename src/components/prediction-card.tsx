@@ -11,6 +11,8 @@ import {
   Target,
   XCircle,
 } from "lucide-react";
+import { AiStatementClassification } from "@/components/ai-statement-classification";
+import type { AnalysisMode, StockStatementType } from "@/lib/ai/types";
 
 export type PredictionStatus =
   | "tracking"
@@ -71,6 +73,8 @@ export interface PredictionCardProps {
   href: string;
   className?: string;
   compact?: boolean;
+  analysisMode?: AnalysisMode;
+  statementType?: StockStatementType;
   variant?: "detail" | "list" | "home";
 }
 
@@ -132,6 +136,8 @@ export function PredictionCard({
   href,
   className = "",
   compact = false,
+  analysisMode,
+  statementType,
   variant = "detail",
 }: PredictionCardProps) {
   const status = STATUS_META[prediction.status];
@@ -178,6 +184,15 @@ export function PredictionCard({
       <blockquote className={`mt-4 break-words border-l-2 border-brand/30 pl-3 text-sm font-medium leading-6 text-slate-800 ${isSummaryCard ? "line-clamp-2" : ""}`}>
         “{originalText}”
       </blockquote>
+
+      {statementType ? (
+        <AiStatementClassification
+          className="mt-4"
+          compact
+          mode={analysisMode}
+          statementType={statementType}
+        />
+      ) : null}
 
       {!isSummaryCard && (
         <dl className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4">

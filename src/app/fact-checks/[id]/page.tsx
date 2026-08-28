@@ -15,6 +15,7 @@ import {
   ShieldCheck,
   UserRound,
 } from "lucide-react";
+import { AiStatementClassification } from "@/components/ai-statement-classification";
 import { ConfidenceMeter } from "@/components/confidence-meter";
 import { ComparisonList, EvidenceCard } from "@/components/evidence-card";
 import { AnalysisInputSummary } from "@/components/analysis-input-summary";
@@ -84,6 +85,10 @@ export default async function FactCheckPage({ params, searchParams }: PageProps)
   const analysisInput = readAnalysisInputFromRecord(query);
   const displayedStatement = analysisInput?.statement ?? statement.text;
   const displayedInfluencer = analysisInput?.influencerName ?? influencer.displayName;
+  const displayedCompany =
+    analysisInput?.structuredAnalysis?.stockName ??
+    analysisInput?.structuredAnalysis?.company ??
+    factCheck.companyOrStockLabel;
   const influencerProfileHref = resolveInfluencerProfileHref(
     analysisInput?.influencerName,
     influencer.slug,
@@ -166,6 +171,14 @@ export default async function FactCheckPage({ params, searchParams }: PageProps)
               <blockquote className="mt-2 break-words text-base font-extrabold leading-7 text-ink sm:text-lg sm:leading-8">
                 “{displayedStatement}”
               </blockquote>
+              {analysisInput?.structuredAnalysis ? (
+                <AiStatementClassification
+                  className="mt-4"
+                  compact
+                  mode={analysisInput.analysisMode}
+                  statementType={analysisInput.structuredAnalysis.statementType}
+                />
+              ) : null}
             </div>
             <div className="rounded-2xl border border-line bg-white p-5">
               <p className="flex items-center gap-2 text-xs font-semibold text-muted">
@@ -173,7 +186,7 @@ export default async function FactCheckPage({ params, searchParams }: PageProps)
                 기업 또는 종목
               </p>
               <p className="mt-2 text-lg font-black tracking-[-0.02em] text-ink">
-                {factCheck.companyOrStockLabel}
+                {displayedCompany}
               </p>
               <p className="mt-2 text-xs leading-5 text-muted">이 발언에서 공식자료와 비교한 대상입니다.</p>
             </div>
@@ -193,7 +206,16 @@ export default async function FactCheckPage({ params, searchParams }: PageProps)
         </div>
       </section>
 
-      <DemoNotice className="mt-4" compact />
+      <DemoNotice
+        className="mt-4"
+        compact
+        title={analysisInput?.analysisMode === "ai" ? "AI 분류와 데모 검증 구분" : "데모 데이터 안내"}
+        description={
+          analysisInput?.analysisMode === "ai"
+            ? "Gemini는 이 발언을 공식자료 확인이 필요한 사실 주장으로 분류했습니다. 위 검증 결과와 아래 공식자료·AI 신뢰수준은 아직 데모 데이터이며 실제 사실 판정이 아닙니다."
+            : undefined
+        }
+      />
 
       <div className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,1fr)_300px] lg:items-start">
         <div className="space-y-4">
