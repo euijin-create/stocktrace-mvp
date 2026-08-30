@@ -20,6 +20,8 @@ import { ConfidenceMeter } from "@/components/confidence-meter";
 import { ComparisonList, EvidenceCard } from "@/components/evidence-card";
 import { AnalysisInputSummary } from "@/components/analysis-input-summary";
 import { FactCheckCorrectionRequest } from "@/components/fact-check-correction-request";
+import { OpenDartDisclosures } from "@/components/open-dart-disclosures";
+import { OpenDartVerificationDetails } from "@/components/open-dart-verification";
 import { ReceiptCard } from "@/components/receipt-card";
 import { DemoNotice } from "@/components/ui/demo-notice";
 import { StatusBadge, type StatusTone } from "@/components/ui/status-badge";
@@ -29,6 +31,9 @@ import {
   readAnalysisInputFromRecord,
   type AnalysisSearchParams,
 } from "@/lib/mock-analysis";
+import { lookupOpenDartDisclosures } from "@/lib/dart/open-dart";
+import { verifyOpenDartClaim } from "@/lib/fact-check/verify-open-dart-claim";
+import type { OpenDartVerificationStatus } from "@/lib/fact-check/types";
 import {
   CLAIM_TYPE_META,
   COMPARISON_RESULT_META,
@@ -40,7 +45,11 @@ import {
   resolveInfluencerProfileHref,
   type SemanticTone,
 } from "@/lib/stocktrace";
-import type { OfficialSourceCategory } from "@/types/stocktrace";
+import {
+  VERIFICATION_STATUS,
+  type OfficialSourceCategory,
+  type VerificationStatus,
+} from "@/types/stocktrace";
 
 type PageProps = {
   params: Promise<{ id: string }>;
@@ -63,6 +72,18 @@ const sourceCategoryLabel: Record<OfficialSourceCategory, string> = {
   government: "정부기관 자료",
 };
 
+const actualVerificationStatusMap: Record<
+  OpenDartVerificationStatus,
+  VerificationStatus
+> = {
+  confirmed: VERIFICATION_STATUS.CONFIRMED,
+  partially_confirmed: VERIFICATION_STATUS.PARTIALLY_CONFIRMED,
+  exaggeration_or_context_missing: VERIFICATION_STATUS.CONTEXT_MAY_BE_MISSING,
+  no_official_evidence: VERIFICATION_STATUS.NO_OFFICIAL_EVIDENCE,
+  conflicts_with_official_source: VERIFICATION_STATUS.CONFLICTS_OFFICIAL,
+  not_currently_verifiable: VERIFICATION_STATUS.CURRENTLY_UNVERIFIABLE,
+};
+
 export function generateStaticParams() {
   return factChecks.map(({ id }) => ({ id }));
 }
@@ -83,6 +104,41 @@ export default async function FactCheckPage({ params, searchParams }: PageProps)
 
   const { factCheck, statement, influencer, sources, receipt } = view;
   const analysisInput = readAnalysisInputFromRecord(query);
+  const structuredFact =
+    analysisInput?.structuredAnalysis?.statementType === "fact_claim"
+      ? analysisInput.structuredAnalysis
+      : null;
+  const openDartResult = structuredFact
+    ? await lookupOpenDartDisclosures({
+        companyNames: [structuredFact.stockName, structuredFact.company],
+        limit: 40,
+      })
+    : null;
+  const actualFactCheck =
+    analysisInput?.analysisMode === "ai" && structuredFact && openDartResult
+      ? await verifyOpenDartClaim({
+          lookup: openDartResult,
+          statement: analysisInput.statement,
+        })
+      : null;
+  const liveVerification =
+    actualFactCheck?.status === "success" ? actualFactCheck.result : null;
+  const isLiveVerification = liveVerification !== null;
+  const displayedOpenDartResult = openDartResult
+    ? {
+        ...openDartResult,
+        disclosures:
+          actualFactCheck && actualFactCheck.candidateDisclosures.length > 0
+            ? actualFactCheck.candidateDisclosures
+            : openDartResult.disclosures.slice(0, 6),
+      }
+    : null;
+  const dataSeparationDescription =
+    analysisInput?.analysisMode === "ai"
+      ? isLiveVerification
+        ? "Gemini의 발언 분류와 OpenDART 공시 원문 기반 비교는 실제 분석입니다. 주가·수익률·사후평가와 발언 영수증의 일부 값은 아직 데모 데이터입니다."
+        : `Gemini의 발언 분류는 실제 AI 분석입니다. ${actualFactCheck?.message ?? "6단계 검증 결과와 공시 내용 비교는 아직 데모 데이터입니다."} 아래 데모 판정은 실제 OpenDART 검증 결과가 아닙니다.`
+      : undefined;
   const displayedStatement = analysisInput?.statement ?? statement.text;
   const displayedInfluencer = analysisInput?.influencerName ?? influencer.displayName;
   const displayedCompany =
@@ -95,7 +151,13 @@ export default async function FactCheckPage({ params, searchParams }: PageProps)
   );
   const preserveAnalysisInput = (href: string) =>
     analysisInput ? appendAnalysisInput(href, analysisInput) : href;
-  const verificationMeta = VERIFICATION_STATUS_META[factCheck.status];
+  const displayedVerificationStatus = liveVerification
+    ? actualVerificationStatusMap[liveVerification.verificationStatus]
+    : factCheck.status;
+  const verificationMeta = VERIFICATION_STATUS_META[displayedVerificationStatus];
+  const displayedSummary = liveVerification?.summary ?? factCheck.summary;
+  const displayedConfidence = liveVerification?.confidence ?? factCheck.confidence.score;
+  const displayedCheckedAt = liveVerification?.verifiedAt ?? factCheck.checkedAt;
   const claimMeta = CLAIM_TYPE_META[statement.primaryType];
   const allExamples = getHomeFactChecks();
 
@@ -140,9 +202,14 @@ export default async function FactCheckPage({ params, searchParams }: PageProps)
             <h1 className="balance-text text-3xl font-black tracking-[-0.04em] text-ink sm:text-4xl">팩트체크 결과</h1>
             <p className="mt-3 text-sm leading-6 text-muted sm:text-base">발언과 확인한 공식자료의 일치 범위를 항목별로 보여드립니다.</p>
           </div>
-          <StatusBadge tone={toneMap[verificationMeta.tone]} className="min-h-9 px-3 text-sm">
-            {verificationMeta.label}
-          </StatusBadge>
+          <div className="flex flex-wrap items-center gap-2">
+            <StatusBadge tone={toneMap[verificationMeta.tone]} className="min-h-9 px-3 text-sm">
+              {verificationMeta.label}
+            </StatusBadge>
+            <StatusBadge tone={isLiveVerification ? "info" : "neutral"}>
+              {isLiveVerification ? "OpenDART 실제 공시 기반 검증" : "데모 팩트체크"}
+            </StatusBadge>
+          </div>
         </div>
       </div>
 
@@ -153,7 +220,9 @@ export default async function FactCheckPage({ params, searchParams }: PageProps)
               <ShieldCheck aria-hidden="true" className="size-5.5" />
             </span>
             <div>
-              <p className="text-xs font-bold text-emerald-700">검증 결과</p>
+              <p className="text-xs font-bold text-emerald-700">
+                {isLiveVerification ? "OpenDART 공식자료 검증" : "팩트체크 검증 결과"}
+              </p>
               <h2 id="verdict-title" className="mt-1 text-2xl font-black tracking-[-0.03em] text-ink">
                 {verificationMeta.label}
               </h2>
@@ -194,14 +263,19 @@ export default async function FactCheckPage({ params, searchParams }: PageProps)
 
           <div className="mt-5 rounded-2xl bg-[#102f3e] p-5 text-white">
             <p className="text-xs font-bold text-cyan-200">StockTrace 판단 요약</p>
-            <p className="mt-2 text-[15px] font-semibold leading-7">{factCheck.summary}</p>
+            <p className="mt-2 text-[15px] font-semibold leading-7">{displayedSummary}</p>
           </div>
 
           <ConfidenceMeter
             className="mt-5"
-            score={factCheck.confidence.score}
-            level={factCheck.confidence.level}
-            rationale={factCheck.confidence.rationale}
+            score={displayedConfidence}
+            level={liveVerification ? undefined : factCheck.confidence.level}
+            label={liveVerification ? "공시 근거 비교 신뢰수준" : undefined}
+            rationale={
+              liveVerification
+                ? "제공된 OpenDART 실제 공시 발췌문과 사용자 발언을 비교한 AI의 구조화 확신도입니다."
+                : factCheck.confidence.rationale
+            }
           />
         </div>
       </section>
@@ -209,12 +283,14 @@ export default async function FactCheckPage({ params, searchParams }: PageProps)
       <DemoNotice
         className="mt-4"
         compact
-        title={analysisInput?.analysisMode === "ai" ? "AI 분류와 데모 검증 구분" : "데모 데이터 안내"}
-        description={
-          analysisInput?.analysisMode === "ai"
-            ? "Gemini는 이 발언을 공식자료 확인이 필요한 사실 주장으로 분류했습니다. 위 검증 결과와 아래 공식자료·AI 신뢰수준은 아직 데모 데이터이며 실제 사실 판정이 아닙니다."
-            : undefined
+        title={
+          isLiveVerification
+            ? "실제 검증과 데모 데이터 구분"
+            : analysisInput?.analysisMode === "ai"
+              ? "AI 분류와 데모 검증 구분"
+              : "데모 데이터 안내"
         }
+        description={dataSeparationDescription}
       />
 
       <div className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,1fr)_300px] lg:items-start">
@@ -239,19 +315,38 @@ export default async function FactCheckPage({ params, searchParams }: PageProps)
               </div>
               <div className="rounded-xl border border-line p-4">
                 <dt className="flex items-center gap-2 text-xs font-semibold text-muted"><CalendarCheck2 aria-hidden="true" className="size-3.5" /> 검증일</dt>
-                <dd className="mt-1.5 text-sm font-extrabold text-ink">{formatKoreanDate(factCheck.checkedAt)}</dd>
+                <dd className="mt-1.5 text-sm font-extrabold text-ink">{formatKoreanDate(displayedCheckedAt)}</dd>
               </div>
             </dl>
           </FactCheckDetail>
 
           <FactCheckDetail
             title="근거자료"
-            description={`공식자료 비교 ${factCheck.comparisons.length}개 항목 · 참고 자료 ${sources.length}건`}
+            description={
+              displayedOpenDartResult
+                ? isLiveVerification
+                  ? `OpenDART 실제 원문 비교 ${liveVerification.matchedFacts.length + liveVerification.conflictingFacts.length + liveVerification.unverifiedFacts.length}개 항목 · 실제 공시 ${liveVerification.sources.length}건`
+                  : `OpenDART 공시 조회 · 데모 비교 ${factCheck.comparisons.length}개 항목 · 데모 자료 ${sources.length}건`
+                : `데모 비교 ${factCheck.comparisons.length}개 항목 · 데모 자료 ${sources.length}건`
+            }
           >
+            {displayedOpenDartResult ? (
+              <div className="mb-7">
+                <OpenDartDisclosures result={displayedOpenDartResult} />
+              </div>
+            ) : null}
+
+            {liveVerification ? (
+              <OpenDartVerificationDetails result={liveVerification} />
+            ) : (
+              <>
             <section aria-labelledby="comparison-title">
-              <div className="mb-4">
-                <p className="text-xs font-extrabold tracking-[0.12em] text-brand">CLAIM VS SOURCE</p>
-                <h2 id="comparison-title" className="mt-1.5 text-lg font-black tracking-[-0.025em] text-ink">발언과 공식자료 비교</h2>
+              <div className="mb-4 flex flex-wrap items-end justify-between gap-2">
+                <div>
+                  <p className="text-xs font-extrabold tracking-[0.12em] text-brand">DEMO CLAIM VS SOURCE</p>
+                  <h2 id="comparison-title" className="mt-1.5 text-lg font-black tracking-[-0.025em] text-ink">발언과 공식자료 비교</h2>
+                </div>
+                <StatusBadge tone="neutral">데모 판정</StatusBadge>
               </div>
               <ComparisonList
                 items={factCheck.comparisons.map((comparison) => ({
@@ -262,9 +357,12 @@ export default async function FactCheckPage({ params, searchParams }: PageProps)
             </section>
 
             <section className="mt-7" aria-labelledby="sources-title">
-              <div className="mb-4">
-                <p className="text-xs font-extrabold tracking-[0.12em] text-brand">OFFICIAL SOURCES</p>
-                <h2 id="sources-title" className="mt-1.5 text-lg font-black tracking-[-0.025em] text-ink">검증에 사용된 공식자료</h2>
+              <div className="mb-4 flex flex-wrap items-end justify-between gap-2">
+                <div>
+                  <p className="text-xs font-extrabold tracking-[0.12em] text-brand">DEMO SOURCES</p>
+                  <h2 id="sources-title" className="mt-1.5 text-lg font-black tracking-[-0.025em] text-ink">검증에 사용된 예시 자료</h2>
+                </div>
+                <StatusBadge tone="neutral">데모 공시 데이터</StatusBadge>
               </div>
               <div className="space-y-3">
                 {sources.map((source) => (
@@ -281,6 +379,8 @@ export default async function FactCheckPage({ params, searchParams }: PageProps)
                 ))}
               </div>
             </section>
+              </>
+            )}
           </FactCheckDetail>
 
           {formattedReceipt && (

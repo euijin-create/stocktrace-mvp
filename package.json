@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "@google/genai": "^2.19.0",
+    "fflate": "^0.8.3",
     "lucide-react": "latest",
     "next": "latest",
     "react": "latest",

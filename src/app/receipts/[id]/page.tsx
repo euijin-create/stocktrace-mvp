@@ -98,7 +98,7 @@ export default async function ReceiptPage({ params, searchParams }: PageProps) {
           <h1 className="mt-2 balance-text text-3xl font-black tracking-[-0.04em] text-ink sm:text-4xl">발언 당시의 정보를 한 장에</h1>
           <p className="mt-3 max-w-2xl text-sm leading-6 text-muted sm:text-base">원문, 게시 시점, 종목과 당시 주가를 기록해 이후의 검증·평가와 연결합니다.</p>
         </div>
-        <Link href={preserveAnalysisInput(factCheck ? `/fact-checks/${factCheck.id}` : "/analyze")} className="inline-flex min-h-11 w-fit items-center gap-2 rounded-xl border border-line bg-white px-4 text-sm font-extrabold text-ink hover:bg-slate-50">
+        <Link prefetch={false} href={preserveAnalysisInput(factCheck ? `/fact-checks/${factCheck.id}` : "/analyze")} className="inline-flex min-h-11 w-fit items-center gap-2 rounded-xl border border-line bg-white px-4 text-sm font-extrabold text-ink hover:bg-slate-50">
           <ArrowLeft aria-hidden="true" className="size-4" />
           {factCheck ? "팩트체크로 돌아가기" : "분석으로 돌아가기"}
         </Link>
@@ -136,7 +136,7 @@ export default async function ReceiptPage({ params, searchParams }: PageProps) {
             <h2 id="connected-title" className="text-sm font-black text-ink">연결된 기록</h2>
             <div className="mt-3 space-y-2">
               {factCheck && (
-                <Link href={preserveAnalysisInput(`/fact-checks/${factCheck.id}`)} className="flex min-h-11 items-center justify-between gap-2 rounded-xl bg-slate-50 px-3 text-sm font-bold text-ink hover:bg-[#edf5f5]">
+                <Link prefetch={false} href={preserveAnalysisInput(`/fact-checks/${factCheck.id}`)} className="flex min-h-11 items-center justify-between gap-2 rounded-xl bg-slate-50 px-3 text-sm font-bold text-ink hover:bg-[#edf5f5]">
                   <span className="flex items-center gap-2"><FileCheck2 aria-hidden="true" className="size-4 text-brand" /> 팩트체크 결과</span>
                   <ChevronRight aria-hidden="true" className="size-4" />
                 </Link>

@@ -434,6 +434,7 @@ export function AnalysisWorkspace({ initialMode }: { initialMode: AnalysisMode }
                         {analysis.destinationHref ? (
                           <Link
                             href={appendAnalysisInput(analysis.destinationHref, selectedInput)}
+                            prefetch={analysis.destinationHref.startsWith("/fact-checks/") ? false : undefined}
                             className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-ink px-4 text-sm font-extrabold text-white transition hover:bg-[#1c4053] sm:w-fit sm:min-w-64"
                           >
                             {isFact ? (
@@ -524,6 +525,7 @@ export function AnalysisWorkspace({ initialMode }: { initialMode: AnalysisMode }
                 {result.destinationHref ? (
                   <Link
                     href={appendAnalysisInput(result.destinationHref, resultInput)}
+                    prefetch={result.destinationHref.startsWith("/fact-checks/") ? false : undefined}
                     className="flex min-h-13 items-center justify-center gap-2 rounded-xl bg-ink px-4 text-sm font-extrabold text-white transition hover:bg-[#1c4053] sm:col-span-2"
                   >
                     {result.kind === "fact" ? (
