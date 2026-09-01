@@ -7,6 +7,7 @@ import {
   ArrowRight,
   BadgeCheck,
   BarChart3,
+  CalendarDays,
   Check,
   ChevronRight,
   FileCheck2,
@@ -32,6 +33,26 @@ import {
 } from "@/lib/mock-analysis";
 import { CLAIM_TYPE_META } from "@/lib/stocktrace";
 
+function getTodayInSeoul(): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    day: "2-digit",
+    month: "2-digit",
+    timeZone: "Asia/Seoul",
+    year: "numeric",
+  }).format(new Date());
+}
+
+function isValidCalendarDate(value: string): boolean {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (!match) return false;
+  const date = new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3])));
+  return (
+    date.getUTCFullYear() === Number(match[1]) &&
+    date.getUTCMonth() === Number(match[2]) - 1 &&
+    date.getUTCDate() === Number(match[3])
+  );
+}
+
 export function AnalysisWorkspace({ initialMode }: { initialMode: AnalysisMode }) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -44,6 +65,8 @@ export function AnalysisWorkspace({ initialMode }: { initialMode: AnalysisMode }
   const [url, setUrl] = useState(initialUrl);
   const [influencer, setInfluencer] = useState(restoredInput?.influencerName ?? "");
   const [statement, setStatement] = useState(restoredInput?.statement ?? "");
+  const today = useMemo(() => getTodayInSeoul(), []);
+  const [statementDate, setStatementDate] = useState(restoredInput?.statementDate ?? today);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [analysisMode, setAnalysisMode] = useState<AnalysisMode>(
@@ -56,8 +79,9 @@ export function AnalysisWorkspace({ initialMode }: { initialMode: AnalysisMode }
       contentUrl: url.trim(),
       influencerName: influencer.trim(),
       statement: statement.trim(),
+      statementDate,
     }),
-    [influencer, statement, url],
+    [influencer, statement, statementDate, url],
   );
   const result = results.length === 1 ? results[0].analysis : null;
   const resultInput = analyzedInput ?? submittedInput;
@@ -67,6 +91,7 @@ export function AnalysisWorkspace({ initialMode }: { initialMode: AnalysisMode }
     setUrl(sample.input.contentUrl);
     setInfluencer(sample.input.influencerName);
     setStatement(sample.input.statement);
+    setStatementDate(today);
     setError("");
     setResults([]);
     setAnalyzedInput(null);
@@ -78,6 +103,10 @@ export function AnalysisWorkspace({ initialMode }: { initialMode: AnalysisMode }
     if (submittingRef.current) return;
     if (!url.trim() || !influencer.trim() || !statement.trim()) {
       setError("콘텐츠 URL, 인플루언서 이름, 분석할 발언을 모두 입력해 주세요.");
+      return;
+    }
+    if (!isValidCalendarDate(statementDate) || statementDate > today) {
+      setError("발언 기준일은 오늘 또는 그 이전의 올바른 날짜를 선택해 주세요.");
       return;
     }
     try {
@@ -164,6 +193,26 @@ export function AnalysisWorkspace({ initialMode }: { initialMode: AnalysisMode }
         </div>
 
         <form onSubmit={submit} noValidate className="space-y-5 p-5 sm:p-7">
+          <div>
+            <label htmlFor="statement-date" className="mb-2 block text-sm font-bold text-ink">
+              발언 기준일 <span className="text-action">*</span>
+            </label>
+            <div className="flex min-h-13 items-center gap-3 rounded-xl border border-line bg-white px-4 transition focus-within:border-action focus-within:ring-3 focus-within:ring-blue-100">
+              <CalendarDays aria-hidden="true" className="size-4.5 shrink-0 text-slate-400" />
+              <input
+                id="statement-date"
+                type="date"
+                value={statementDate}
+                max={today}
+                onChange={(event) => setStatementDate(event.target.value)}
+                className="number-tabular min-w-0 flex-1 bg-transparent py-3 text-sm text-ink outline-none"
+              />
+            </div>
+            <p className="mt-1.5 text-xs leading-5 text-muted">
+              휴장일이면 이 날짜 이전의 가장 가까운 거래일 종가를 사용합니다.
+            </p>
+          </div>
+
           <div>
             <label htmlFor="content-url" className="mb-2 block text-sm font-bold text-ink">
               콘텐츠 URL <span className="text-action">*</span>
@@ -291,7 +340,7 @@ export function AnalysisWorkspace({ initialMode }: { initialMode: AnalysisMode }
               </h2>
               <p className="mt-1.5 text-xs leading-5 text-slate-600">
                 {initialMode === "ai"
-                  ? "문장 분리·분류·기업명과 예측 조건 추출을 한 번의 요청으로 처리합니다. 공식자료와 주가 결과는 아직 데모 데이터입니다."
+                  ? "문장 분리·분류·기업명과 예측 조건 추출을 한 번의 요청으로 처리합니다. 공식자료와 시장데이터는 결과 화면에서 별도로 조회합니다."
                   : "Gemini API 키를 설정하면 실제 AI 분석으로 전환됩니다. 지금은 기존 mock 규칙으로 안전하게 체험할 수 있습니다."}
               </p>
             </div>
@@ -434,7 +483,12 @@ export function AnalysisWorkspace({ initialMode }: { initialMode: AnalysisMode }
                         {analysis.destinationHref ? (
                           <Link
                             href={appendAnalysisInput(analysis.destinationHref, selectedInput)}
-                            prefetch={analysis.destinationHref.startsWith("/fact-checks/") ? false : undefined}
+                            prefetch={
+                              analysis.destinationHref.startsWith("/fact-checks/") ||
+                              analysis.destinationHref.startsWith("/predictions")
+                                ? false
+                                : undefined
+                            }
                             className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-ink px-4 text-sm font-extrabold text-white transition hover:bg-[#1c4053] sm:w-fit sm:min-w-64"
                           >
                             {isFact ? (
@@ -525,7 +579,12 @@ export function AnalysisWorkspace({ initialMode }: { initialMode: AnalysisMode }
                 {result.destinationHref ? (
                   <Link
                     href={appendAnalysisInput(result.destinationHref, resultInput)}
-                    prefetch={result.destinationHref.startsWith("/fact-checks/") ? false : undefined}
+                    prefetch={
+                      result.destinationHref.startsWith("/fact-checks/") ||
+                      result.destinationHref.startsWith("/predictions")
+                        ? false
+                        : undefined
+                    }
                     className="flex min-h-13 items-center justify-center gap-2 rounded-xl bg-ink px-4 text-sm font-extrabold text-white transition hover:bg-[#1c4053] sm:col-span-2"
                   >
                     {result.kind === "fact" ? (
@@ -562,7 +621,7 @@ export function AnalysisWorkspace({ initialMode }: { initialMode: AnalysisMode }
               </div>
 
               <p className="mt-4 text-xs leading-5 text-muted">
-                발언 분석은 위 모드로 처리했으며, 상세 근거·공식자료·주가·사후 수익률은 준비된 데모 데이터를 사용합니다.
+                발언 분석은 위 모드로 처리하며, 공식자료와 시장데이터는 연결된 결과 화면에서 별도로 조회합니다. 사후 평가는 데모 데이터로 구분합니다.
               </p>
             </div>
           </section>

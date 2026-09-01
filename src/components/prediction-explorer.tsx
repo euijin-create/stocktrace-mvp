@@ -5,10 +5,12 @@ import { useSearchParams } from "next/navigation";
 import { AlertTriangle, CheckCircle2, Clock3, Layers3 } from "lucide-react";
 import { AnalysisInputSummary } from "@/components/analysis-input-summary";
 import { PredictionCard } from "@/components/prediction-card";
+import { PredictionMarketData } from "@/components/prediction-market-data";
 import { mockDatabase } from "@/data/mock-data";
 import { getPredictionAnalysisOverrides } from "@/lib/ai/prediction-overrides";
 import { appendAnalysisInput, readAnalysisInput } from "@/lib/mock-analysis";
 import { formatKoreanDate, getPredictionView } from "@/lib/stocktrace";
+import type { PredictionMarketSnapshotResult } from "@/lib/market-data/types";
 import type { PredictionStatus } from "@/types/stocktrace";
 
 type Filter = "all" | "active" | "completed" | "insufficient";
@@ -27,7 +29,11 @@ function filterForStatus(status?: PredictionStatus): Filter {
   return "all";
 }
 
-export function PredictionExplorer() {
+export function PredictionExplorer({
+  marketDataResult,
+}: {
+  marketDataResult: PredictionMarketSnapshotResult | null;
+}) {
   const searchParams = useSearchParams();
   const focusId = searchParams.get("focus");
   const analysisInput = useMemo(
@@ -63,7 +69,7 @@ export function PredictionExplorer() {
           <AnalysisInputSummary input={analysisInput} />
           {analysisInput.structuredAnalysis && (
             <p className="mt-2 rounded-xl border border-blue-100 bg-blue-50/70 px-3.5 py-2.5 text-xs font-semibold leading-5 text-blue-900">
-              {analysisInput.analysisMode === "ai" ? "AI 실제 분석" : "데모 분석"}에서 추출한 예측 조건을 카드에 반영했습니다. 발언 당시 주가와 사후 평가는 데모 데이터입니다.
+              {analysisInput.analysisMode === "ai" ? "AI 실제 분석" : "데모 분석"}에서 추출한 예측 조건을 카드에 반영했습니다. {marketDataResult?.ok ? "발언일 종가와 기준지수는 실제 시장데이터이며, 사후 평가는 아직 자동 생성하지 않습니다." : "실제 주가 조회 결과는 선택한 카드에서 별도로 안내합니다."}
             </p>
           )}
         </div>
@@ -99,6 +105,8 @@ export function PredictionExplorer() {
           const focused = focusId === prediction.id;
           const overrides = focused ? getPredictionAnalysisOverrides(analysisInput) : null;
           const evaluation = overrides ? undefined : prediction.evaluation;
+          const actualMarket = focused && marketDataResult?.ok ? marketDataResult : null;
+          const calculatedTargetPrice = actualMarket?.targets.calculatedTargetPrice ?? null;
           return (
             <div
               key={prediction.id}
@@ -110,8 +118,14 @@ export function PredictionExplorer() {
                   <span className="size-1.5 rounded-full bg-action" /> 분석 결과에서 선택한 예측
                 </p>
               )}
+              {focused && marketDataResult ? (
+                <div className="mb-3">
+                  <PredictionMarketData result={marketDataResult} compact />
+                </div>
+              ) : null}
               <PredictionCard
                 variant="list"
+                prefetch={focused ? false : undefined}
                 analysisMode={focused ? analysisInput?.analysisMode : undefined}
                 href={
                   focused && analysisInput
@@ -119,24 +133,44 @@ export function PredictionExplorer() {
                     : `/predictions/${prediction.id}`
                 }
                 influencerName={focused && analysisInput ? analysisInput.influencerName : influencer.displayName}
-                stockName={overrides?.stockLabel ?? stock.name}
-                stockSymbol={overrides?.stockLabel ? undefined : `${stock.market} · ${stock.symbol}`}
+                stockName={actualMarket?.company.corpName ?? overrides?.stockLabel ?? stock.name}
+                stockSymbol={actualMarket ? `${actualMarket.market} · ${actualMarket.stockCode}` : overrides?.stockLabel ? undefined : `${stock.market} · ${stock.symbol}`}
                 originalText={focused && analysisInput ? analysisInput.statement : statement.text}
                 statementType={
                   focused ? analysisInput?.structuredAnalysis?.statementType : undefined
                 }
                 prediction={{
                   id: prediction.id,
-                  statedAt: formatKoreanDate(prediction.statedAt),
-                  priceAtStatement: {
-                    ...prediction.priceAtStatement,
-                    capturedAt: formatKoreanDate(prediction.priceAtStatement.capturedAt),
-                  },
+                  statedAt: actualMarket
+                    ? formatKoreanDate(actualMarket.statementDate)
+                    : formatKoreanDate(prediction.statedAt),
+                  priceAtStatement: actualMarket
+                    ? {
+                        price: { amount: actualMarket.priceAtStatement.close, currency: "KRW" },
+                        capturedAt: formatKoreanDate(actualMarket.priceAtStatement.date),
+                        sourceLabel: actualMarket.provider.displayName,
+                        dataMode: "actual",
+                      }
+                    : {
+                        ...prediction.priceAtStatement,
+                        capturedAt: formatKoreanDate(prediction.priceAtStatement.capturedAt),
+                        dataMode: "demo",
+                      },
                   direction: overrides ? overrides.direction : prediction.direction,
                   targetReturnPct: overrides ? overrides.targetReturnPct : prediction.targetReturnPct,
-                  targetPrice: overrides ? overrides.targetPrice : prediction.targetPrice,
+                  targetPrice: overrides
+                    ? overrides.targetPrice ?? (calculatedTargetPrice === null
+                        ? undefined
+                        : { amount: calculatedTargetPrice, currency: "KRW" })
+                    : prediction.targetPrice,
                   horizonLabel: overrides ? overrides.horizonLabel : prediction.horizonLabel,
-                  evaluationDueAt: prediction.evaluationDueAt ? formatKoreanDate(prediction.evaluationDueAt) : undefined,
+                  evaluationDueAt: overrides
+                    ? actualMarket?.evaluation.dueDate
+                      ? formatKoreanDate(actualMarket.evaluation.dueDate)
+                      : undefined
+                    : prediction.evaluationDueAt
+                      ? formatKoreanDate(prediction.evaluationDueAt)
+                      : undefined,
                   missingConditions: overrides ? overrides.missingConditions : prediction.missingConditions,
                   status: overrides ? overrides.status : prediction.status,
                   evaluation:

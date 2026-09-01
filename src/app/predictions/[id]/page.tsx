@@ -21,10 +21,12 @@ import {
 import { AiStatementClassification } from "@/components/ai-statement-classification";
 import { AnalysisInputSummary } from "@/components/analysis-input-summary";
 import { PredictionCard } from "@/components/prediction-card";
+import { PredictionMarketData } from "@/components/prediction-market-data";
 import { DemoNotice } from "@/components/ui/demo-notice";
 import { StatusBadge, type StatusTone } from "@/components/ui/status-badge";
 import { predictions } from "@/data/mock-data";
 import { getPredictionAnalysisOverrides } from "@/lib/ai/prediction-overrides";
+import { getPredictionMarketSnapshot } from "@/lib/market-data";
 import {
   appendAnalysisInput,
   readAnalysisInputFromRecord,
@@ -82,11 +84,33 @@ export default async function PredictionDetailPage({ params, searchParams }: Pag
   const preserveAnalysisInput = (href: string) =>
     analysisInput ? appendAnalysisInput(href, analysisInput) : href;
   const overrides = getPredictionAnalysisOverrides(analysisInput);
-  const displayedStockName = overrides?.stockLabel ?? stock.name;
-  const displayedStockSymbol = overrides?.stockLabel ? null : `${stock.market} · ${stock.symbol}`;
+  const structuredPrediction = analysisInput?.structuredAnalysis?.statementType === "prediction"
+    ? analysisInput.structuredAnalysis
+    : null;
+  const marketDataResult = structuredPrediction && analysisInput?.statementDate
+    ? await getPredictionMarketSnapshot({
+        companyNames: [structuredPrediction.company, structuredPrediction.stockName],
+        direction: structuredPrediction.direction,
+        predictionPeriod: structuredPrediction.predictionPeriod,
+        statementDate: analysisInput.statementDate,
+        targetPrice: structuredPrediction.targetPrice,
+        targetReturnPercent: structuredPrediction.targetReturnPercent,
+      })
+    : null;
+  const actualMarket = marketDataResult?.ok ? marketDataResult : null;
+  const displayedStockName = actualMarket?.company.corpName ?? overrides?.stockLabel ?? stock.name;
+  const displayedStockSymbol = actualMarket
+    ? `${actualMarket.market} · ${actualMarket.stockCode}`
+    : overrides?.stockLabel
+      ? null
+      : `${stock.market} · ${stock.symbol}`;
   const displayedDirection = overrides ? overrides.direction : prediction.direction;
   const displayedTargetReturn = overrides ? overrides.targetReturnPct : prediction.targetReturnPct;
-  const displayedTargetPrice = overrides ? overrides.targetPrice : prediction.targetPrice;
+  const displayedTargetPrice = overrides
+    ? overrides.targetPrice ?? (actualMarket?.targets.calculatedTargetPrice == null
+        ? undefined
+        : { amount: actualMarket.targets.calculatedTargetPrice, currency: "KRW" as const })
+    : prediction.targetPrice;
   const displayedHorizon = overrides ? overrides.horizonLabel : prediction.horizonLabel;
   const displayedMissingConditions = overrides
     ? overrides.missingConditions
@@ -115,6 +139,35 @@ export default async function PredictionDetailPage({ params, searchParams }: Pag
   const cardEvaluation = evaluation && evaluation.targetReached !== null
     ? { ...evaluation, evaluatedAt: formatKoreanDate(evaluation.evaluatedAt), targetReached: evaluation.targetReached }
     : undefined;
+  const displayedStatementDate = analysisInput?.statementDate
+    ? formatKoreanDate(analysisInput.statementDate)
+    : formatKoreanDate(prediction.statedAt);
+  const displayedPriceAtStatement = actualMarket
+    ? {
+        capturedAt: formatKoreanDate(actualMarket.priceAtStatement.date),
+        dataMode: "actual" as const,
+        price: { amount: actualMarket.priceAtStatement.close, currency: "KRW" },
+        sourceLabel: actualMarket.provider.displayName,
+      }
+    : marketDataResult && !marketDataResult.ok
+      ? {
+          capturedAt: displayedStatementDate,
+          dataMode: "unavailable" as const,
+          sourceLabel: marketDataResult.message,
+        }
+      : overrides
+        ? {
+            capturedAt: analysisInput?.statementDate
+              ? formatKoreanDate(analysisInput.statementDate)
+              : "기준일 미지정",
+            dataMode: "unavailable" as const,
+            sourceLabel: "발언 기준일을 입력해야 실제 종가를 조회할 수 있습니다.",
+          }
+      : {
+          ...prediction.priceAtStatement,
+          capturedAt: formatKoreanDate(prediction.priceAtStatement.capturedAt),
+          dataMode: "demo" as const,
+        };
 
   const priceRange = evaluation && displayedTargetPrice
     ? buildPriceRange(
@@ -210,13 +263,21 @@ export default async function PredictionDetailPage({ params, searchParams }: Pag
         </div>
       </section>
 
+      {marketDataResult ? (
+        <div className="mt-4">
+          <PredictionMarketData result={marketDataResult} />
+        </div>
+      ) : null}
+
       <DemoNotice
         compact
         className="mt-4"
-        title={analysisInput?.analysisMode === "ai" ? "AI 분석과 데모 데이터 구분" : "데모 데이터 안내"}
+        title={actualMarket ? "실제 데이터와 데모 데이터 구분" : analysisInput?.analysisMode === "ai" ? "AI 분석과 데모 데이터 구분" : "데모 데이터 안내"}
         description={
-          analysisInput?.analysisMode === "ai"
-            ? "방향·목표 수익률·목표가격·예측 기간은 Gemini가 실제 발언에서 추출했습니다. 발언 당시 주가, 시장지수와 사후 평가는 아직 데모 데이터입니다."
+          actualMarket
+            ? "방향·목표·기간은 Gemini가 발언에서 추출했고, 발언일 종가와 기준지수는 실제 시장데이터입니다. 기존 사후 성과 평가는 아직 데모이며 이 입력에는 자동 적용하지 않습니다."
+            : analysisInput?.analysisMode === "ai"
+              ? "방향·목표 수익률·목표가격·예측 기간은 Gemini가 실제 발언에서 추출했습니다. 실제 주가를 확인하지 못한 경우 다른 종목의 데모 가격으로 대체하지 않습니다."
             : undefined
         }
       />
@@ -360,16 +421,19 @@ export default async function PredictionDetailPage({ params, searchParams }: Pag
             originalText={analysisInput?.statement ?? statement.text}
             prediction={{
               id: prediction.id,
-              statedAt: formatKoreanDate(prediction.statedAt),
-              priceAtStatement: {
-                ...prediction.priceAtStatement,
-                capturedAt: formatKoreanDate(prediction.priceAtStatement.capturedAt),
-              },
+              statedAt: displayedStatementDate,
+              priceAtStatement: displayedPriceAtStatement,
               direction: displayedDirection,
               targetReturnPct: displayedTargetReturn,
               targetPrice: displayedTargetPrice,
               horizonLabel: displayedHorizon,
-              evaluationDueAt: prediction.evaluationDueAt ? formatKoreanDate(prediction.evaluationDueAt) : undefined,
+              evaluationDueAt: overrides
+                ? actualMarket?.evaluation.dueDate
+                  ? formatKoreanDate(actualMarket.evaluation.dueDate)
+                  : undefined
+                : prediction.evaluationDueAt
+                  ? formatKoreanDate(prediction.evaluationDueAt)
+                  : undefined,
               missingConditions: displayedMissingConditions,
               status: displayedStatus,
               evaluation: cardEvaluation,

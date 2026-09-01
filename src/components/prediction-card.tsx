@@ -30,9 +30,10 @@ export interface PredictionMoney {
 }
 
 export interface PredictionPriceSnapshot {
-  price: PredictionMoney;
+  price?: PredictionMoney;
   capturedAt: string;
   sourceLabel: string;
+  dataMode?: "actual" | "demo" | "unavailable";
 }
 
 export interface PredictionEvaluation {
@@ -76,6 +77,7 @@ export interface PredictionCardProps {
   analysisMode?: AnalysisMode;
   statementType?: StockStatementType;
   variant?: "detail" | "list" | "home";
+  prefetch?: boolean;
 }
 
 const STATUS_META: Record<
@@ -139,6 +141,7 @@ export function PredictionCard({
   analysisMode,
   statementType,
   variant = "detail",
+  prefetch,
 }: PredictionCardProps) {
   const status = STATUS_META[prediction.status];
   const StatusIcon = status.icon;
@@ -195,12 +198,28 @@ export function PredictionCard({
       ) : null}
 
       {!isSummaryCard && (
-        <dl className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <>
+          <span
+            className={`mt-5 inline-flex rounded-full px-2.5 py-1 text-[11px] font-bold ring-1 ring-inset ${
+              prediction.priceAtStatement.dataMode === "actual"
+                ? "bg-emerald-50 text-emerald-800 ring-emerald-200"
+                : prediction.priceAtStatement.dataMode === "unavailable"
+                  ? "bg-amber-50 text-amber-900 ring-amber-200"
+                : "bg-slate-100 text-slate-700 ring-slate-200"
+            }`}
+          >
+            {prediction.priceAtStatement.dataMode === "actual"
+              ? "실제 주가 데이터"
+              : prediction.priceAtStatement.dataMode === "unavailable"
+                ? "실제 주가 조회 불가"
+                : "데모 주가"}
+          </span>
+          <dl className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
           <PredictionMeta label="발언일" value={prediction.statedAt} />
           <PredictionMeta
-            label="발언 당시 주가"
-            value={formatMoney(prediction.priceAtStatement.price)}
-            detail={prediction.priceAtStatement.sourceLabel}
+            label="발언일 기준 종가"
+            value={prediction.priceAtStatement.price ? formatMoney(prediction.priceAtStatement.price) : "조회하지 못함"}
+            detail={`가격 기준일 ${prediction.priceAtStatement.capturedAt} · ${prediction.priceAtStatement.sourceLabel}`}
           />
           <PredictionMeta
             label="예측 방향"
@@ -212,6 +231,7 @@ export function PredictionCard({
             value={prediction.horizonLabel ?? "미지정"}
           />
         </dl>
+        </>
       )}
 
       {!isInsufficient ? (
@@ -363,6 +383,7 @@ export function PredictionCard({
         )}
         <Link
           href={href}
+          prefetch={prefetch}
           className="inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-xl px-3 text-sm font-bold text-action transition-colors hover:bg-blue-50"
           aria-label={`${stockName} 예측 상세 보기`}
         >

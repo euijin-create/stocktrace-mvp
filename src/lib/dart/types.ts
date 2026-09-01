@@ -4,6 +4,22 @@ export interface OpenDartCorporation {
   stockCode: string | null;
 }
 
+export type OpenDartCorporationLookupStatus =
+  | "success"
+  | "not_configured"
+  | "company_not_found"
+  | "stock_code_not_found"
+  | "rate_limited"
+  | "auth_error"
+  | "unavailable";
+
+export interface OpenDartCorporationLookupResult {
+  company: OpenDartCorporation | null;
+  message: string;
+  requestedName: string | null;
+  status: OpenDartCorporationLookupStatus;
+}
+
 export interface OpenDartDisclosure {
   corpCode: string;
   corpName: string;

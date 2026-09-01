@@ -15,7 +15,8 @@
     "lucide-react": "latest",
     "next": "latest",
     "react": "latest",
-    "react-dom": "latest"
+    "react-dom": "latest",
+    "yahoo-finance2": "^4.0.2"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "latest",

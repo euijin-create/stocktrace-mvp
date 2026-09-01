@@ -9,6 +9,7 @@ export interface ContentAnalysisInput {
   contentUrl: string;
   influencerName: string;
   statement: string;
+  statementDate?: string;
   analysisMode?: AnalysisMode;
   structuredAnalysis?: StockStatementAnalysis;
 }
@@ -54,6 +55,7 @@ export const ANALYSIS_QUERY_KEYS = {
   contentUrl: "contentUrl",
   influencerName: "influencer",
   statement: "statement",
+  statementDate: "statementDate",
   analysisMode: "analysisMode",
   statementType: "statementType",
   company: "company",
@@ -284,6 +286,9 @@ export function appendAnalysisInput(
   url.searchParams.set(ANALYSIS_QUERY_KEYS.contentUrl, input.contentUrl);
   url.searchParams.set(ANALYSIS_QUERY_KEYS.influencerName, input.influencerName);
   url.searchParams.set(ANALYSIS_QUERY_KEYS.statement, input.statement);
+  if (input.statementDate) {
+    url.searchParams.set(ANALYSIS_QUERY_KEYS.statementDate, input.statementDate);
+  }
   if (input.analysisMode) {
     url.searchParams.set(ANALYSIS_QUERY_KEYS.analysisMode, input.analysisMode);
   }
@@ -333,12 +338,25 @@ function readNullableText(value: string | null | undefined): string | null | und
   return normalized || null;
 }
 
+function readIsoCalendarDate(value: string | null | undefined): string | undefined {
+  const normalized = value?.trim();
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(normalized ?? "");
+  if (!match) return undefined;
+  const date = new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3])));
+  return date.getUTCFullYear() === Number(match[1]) &&
+    date.getUTCMonth() === Number(match[2]) - 1 &&
+    date.getUTCDate() === Number(match[3])
+    ? normalized
+    : undefined;
+}
+
 export function readAnalysisInput(read: AnalysisParamReader): ContentAnalysisInput | null {
   if (read(ANALYSIS_QUERY_KEYS.marker) !== ANALYSIS_MARKER) return null;
 
   const contentUrl = read(ANALYSIS_QUERY_KEYS.contentUrl)?.trim() ?? "";
   const influencerName = read(ANALYSIS_QUERY_KEYS.influencerName)?.trim() ?? "";
   const statement = read(ANALYSIS_QUERY_KEYS.statement)?.trim() ?? "";
+  const statementDate = readIsoCalendarDate(read(ANALYSIS_QUERY_KEYS.statementDate));
   if (!contentUrl || !influencerName || !statement) return null;
 
   try {
@@ -406,7 +424,14 @@ export function readAnalysisInput(read: AnalysisParamReader): ContentAnalysisInp
       }
     : undefined;
 
-  return { contentUrl, influencerName, statement, analysisMode, structuredAnalysis };
+  return {
+    contentUrl,
+    influencerName,
+    statement,
+    statementDate,
+    analysisMode,
+    structuredAnalysis,
+  };
 }
 
 export function readAnalysisInputFromRecord(

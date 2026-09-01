@@ -9,6 +9,7 @@ import {
 } from "@/lib/dart/company-matching";
 import type {
   OpenDartCorporation,
+  OpenDartCorporationLookupResult,
   OpenDartDisclosure,
   OpenDartLookupResult,
 } from "@/lib/dart/types";
@@ -484,6 +485,104 @@ function errorResult(
     searchRange,
     status: "unavailable",
   };
+}
+
+function corporationErrorResult(
+  error: unknown,
+  requestedName: string,
+): OpenDartCorporationLookupResult {
+  logOpenDartError(error);
+  const code = error instanceof OpenDartError ? error.code : "unknown";
+
+  if (code === "020") {
+    return {
+      company: null,
+      message: "기업 조회 요청이 많습니다. 잠시 후 다시 시도해주세요.",
+      requestedName,
+      status: "rate_limited",
+    };
+  }
+
+  if (["010", "011", "012", "901"].includes(code)) {
+    return {
+      company: null,
+      message: "OpenDART 연결 설정을 확인해주세요.",
+      requestedName,
+      status: "auth_error",
+    };
+  }
+
+  return {
+    company: null,
+    message: "기업 정보를 불러오지 못했습니다. 잠시 후 다시 시도해주세요.",
+    requestedName,
+    status: "unavailable",
+  };
+}
+
+export async function lookupOpenDartCorporation({
+  companyNames,
+}: {
+  companyNames: Array<string | null | undefined>;
+}): Promise<OpenDartCorporationLookupResult> {
+  const candidates = companyNames
+    .map((name) => name?.trim() ?? "")
+    .filter(Boolean);
+  const requestedName = candidates[0] ?? null;
+  const identifiableNames = candidates.filter(
+    (name) => !isOpenDartPlaceholderCompanyName(name),
+  );
+
+  if (!requestedName || identifiableNames.length === 0) {
+    return {
+      company: null,
+      message: "기업을 정확하게 식별하지 못했습니다.",
+      requestedName,
+      status: "company_not_found",
+    };
+  }
+
+  const apiKey = getOpenDartApiKey();
+  if (!apiKey) {
+    return {
+      company: null,
+      message: "OpenDART 인증키가 없어 실제 기업 정보를 조회할 수 없습니다.",
+      requestedName,
+      status: "not_configured",
+    };
+  }
+
+  try {
+    const index = await getCorporationIndex(apiKey);
+    const company = findExactCorporationFromIndex(index, identifiableNames);
+
+    if (!company) {
+      return {
+        company: null,
+        message: "기업을 정확하게 식별하지 못했습니다.",
+        requestedName,
+        status: "company_not_found",
+      };
+    }
+
+    if (!company.stockCode) {
+      return {
+        company,
+        message: "해당 기업의 상장 종목코드를 확인하지 못했습니다.",
+        requestedName,
+        status: "stock_code_not_found",
+      };
+    }
+
+    return {
+      company,
+      message: "OpenDART에서 실제 기업과 상장 종목코드를 확인했습니다.",
+      requestedName,
+      status: "success",
+    };
+  } catch (error) {
+    return corporationErrorResult(error, requestedName);
+  }
 }
 
 export async function lookupOpenDartDisclosures({

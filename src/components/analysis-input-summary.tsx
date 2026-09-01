@@ -1,4 +1,4 @@
-import { Link2, Quote, UserRound } from "lucide-react";
+import { CalendarDays, Link2, Quote, UserRound } from "lucide-react";
 import type { ContentAnalysisInput } from "@/lib/mock-analysis";
 
 export function AnalysisInputSummary({
@@ -18,7 +18,11 @@ export function AnalysisInputSummary({
           이번 분석에 입력한 내용
         </p>
       </div>
-      <dl className="grid gap-4 p-5 sm:grid-cols-2 sm:p-6">
+      <dl
+        className={`grid gap-4 p-5 sm:p-6 ${
+          input.statementDate ? "sm:grid-cols-3" : "sm:grid-cols-2"
+        }`}
+      >
         <div className="min-w-0">
           <dt className="flex items-center gap-2 text-xs font-semibold text-muted">
             <UserRound aria-hidden="true" className="size-3.5" /> 인플루언서
@@ -44,7 +48,17 @@ export function AnalysisInputSummary({
             </a>
           </dd>
         </div>
-        <div className="min-w-0 sm:col-span-2">
+        {input.statementDate ? (
+          <div className="min-w-0">
+            <dt className="flex items-center gap-2 text-xs font-semibold text-muted">
+              <CalendarDays aria-hidden="true" className="size-3.5" /> 발언 기준일
+            </dt>
+            <dd className="number-tabular mt-1.5 text-sm font-extrabold text-ink">
+              {input.statementDate}
+            </dd>
+          </div>
+        ) : null}
+        <div className={`min-w-0 ${input.statementDate ? "sm:col-span-3" : "sm:col-span-2"}`}>
           <dt className="flex items-center gap-2 text-xs font-semibold text-muted">
             <Quote aria-hidden="true" className="size-3.5" /> 분석한 원문 발언
           </dt>
