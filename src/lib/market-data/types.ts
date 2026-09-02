@@ -88,6 +88,59 @@ export interface PredictionTargetSnapshot {
   targetReturnPercent: number | null;
 }
 
+export type PredictionFinalResult =
+  | "direction_only_correct"
+  | "target_achieved"
+  | "target_not_achieved";
+
+export type PredictionEvaluationUnavailableReason =
+  | "benchmark_data_missing"
+  | "conditions_insufficient"
+  | "invalid_target"
+  | "period_data_invalid"
+  | "stock_data_missing";
+
+export interface PredictionTrackingAssessment {
+  dueDate: string;
+  status: "tracking";
+}
+
+export interface PredictionUnavailableAssessment {
+  dueDate: string | null;
+  message: string;
+  reason: PredictionEvaluationUnavailableReason;
+  status: "unavailable";
+}
+
+export interface PredictionCompletedAssessment {
+  actualReturnPct: number;
+  benchmarkBasePrice: DailyPriceBar;
+  benchmarkEvaluationPrice: DailyPriceBar;
+  benchmarkReturnPct: number;
+  barsEvaluated: number;
+  dataMode: "actual";
+  directionMatched: boolean;
+  dueDate: string;
+  evaluationPrice: DailyPriceBar;
+  excessReturnPct: number;
+  finalAssessment: string;
+  finalResult: PredictionFinalResult;
+  maxDrawdownPct: number;
+  methodologyNote: string;
+  periodHighPrice: number;
+  periodLowPrice: number;
+  priceAtStatement: DailyPriceBar;
+  status: "completed";
+  targetPrice: number;
+  targetReached: boolean;
+  targetSource: "calculated" | "stated";
+}
+
+export type PredictionActualAssessment =
+  | PredictionCompletedAssessment
+  | PredictionTrackingAssessment
+  | PredictionUnavailableAssessment;
+
 export interface PredictionEvaluationSnapshot {
   benchmarkPrice: DailyPriceBar | null;
   dueDate: string | null;
@@ -104,6 +157,7 @@ export interface PredictionBenchmarkSnapshot {
 }
 
 export interface PredictionMarketSnapshotSuccess {
+  assessment: PredictionActualAssessment;
   benchmark: PredictionBenchmarkSnapshot;
   company: {
     corpCode: string;
@@ -123,6 +177,7 @@ export interface PredictionMarketSnapshotSuccess {
 }
 
 export interface PredictionMarketSnapshotFailure extends MarketDataFailure {
+  assessment: PredictionActualAssessment;
   dataMode: "unavailable";
   requestedCompanyName: string | null;
   statementDate: string | null;

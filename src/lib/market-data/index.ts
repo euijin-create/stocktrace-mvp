@@ -6,9 +6,11 @@ import {
   addCalendarDays,
   calculateEvaluationDate,
   compareDateStrings,
+  isCompletedDailyDate,
   parseStrictDate,
   toKoreanMarketDate,
 } from "@/lib/market-data/date";
+import { evaluatePredictionFromDailyBars } from "@/lib/market-data/prediction-evaluation";
 import {
   MarketDataProviderError,
   type ProviderSymbolInspection,
@@ -28,6 +30,7 @@ import {
   type MarketDataErrorCode,
   type MarketDataFailure,
   type PredictionDirection,
+  type PredictionActualAssessment,
   type PredictionMarketSnapshotFailure,
   type PredictionMarketSnapshotResult,
   type PredictionTargetSnapshot,
@@ -69,9 +72,16 @@ function predictionFailure(
   message: string,
   requestedCompanyName: string | null,
   statementDate: string | null,
+  assessment: PredictionActualAssessment = {
+    dueDate: null,
+    message: "현재 평가에 필요한 정보를 확인하지 못했습니다.",
+    reason: "conditions_insufficient",
+    status: "unavailable",
+  },
 ): PredictionMarketSnapshotFailure {
   return {
     ...failure(code, message),
+    assessment,
     dataMode: "unavailable",
     requestedCompanyName,
     statementDate,
@@ -377,6 +387,7 @@ function mapCorporationFailure(
   status: string,
   requestedCompanyName: string | null,
   statementDate: string,
+  assessment: PredictionActualAssessment,
 ): PredictionMarketSnapshotFailure {
   if (status === "company_not_found") {
     return predictionFailure(
@@ -384,6 +395,7 @@ function mapCorporationFailure(
       "종목을 정확하게 식별하지 못했습니다.",
       requestedCompanyName,
       statementDate,
+      assessment,
     );
   }
   if (status === "stock_code_not_found" || status === "stock_not_listed") {
@@ -392,6 +404,7 @@ function mapCorporationFailure(
       "종목을 정확하게 식별하지 못했습니다.",
       requestedCompanyName,
       statementDate,
+      assessment,
     );
   }
   return predictionFailure(
@@ -399,7 +412,31 @@ function mapCorporationFailure(
     "종목 식별 정보를 불러오지 못했습니다. 잠시 후 다시 시도해주세요.",
     requestedCompanyName,
     statementDate,
+    assessment,
   );
+}
+
+function assessmentBeforeMarketData(
+  dueDate: string | null,
+  now: Date,
+): PredictionActualAssessment {
+  if (!dueDate) {
+    return {
+      dueDate: null,
+      message: "구체적인 예측 기간이 없어 현재 평가할 수 없습니다.",
+      reason: "conditions_insufficient",
+      status: "unavailable",
+    };
+  }
+  if (!isCompletedDailyDate(dueDate, now)) {
+    return { dueDate, status: "tracking" };
+  }
+  return {
+    dueDate,
+    message: "평가기간의 실제 시장데이터를 충분히 확인하지 못했습니다.",
+    reason: "stock_data_missing",
+    status: "unavailable",
+  };
 }
 
 export async function getPredictionMarketSnapshot({
@@ -420,13 +457,17 @@ export async function getPredictionMarketSnapshot({
       null,
     );
   }
-  const today = toKoreanMarketDate(new Date());
+  const now = new Date();
+  const today = toKoreanMarketDate(now);
+  const dueDate = calculateEvaluationDate(statementDate, predictionPeriod);
+  const pendingAssessment = assessmentBeforeMarketData(dueDate, now);
   if (compareDateStrings(statementDate, today) > 0) {
     return predictionFailure(
       "invalid_date",
       "발언 기준일은 오늘 또는 과거 날짜를 선택해주세요.",
       requestedCompanyName,
       statementDate,
+      pendingAssessment,
     );
   }
 
@@ -435,18 +476,29 @@ export async function getPredictionMarketSnapshot({
     corporationResult = await lookupOpenDartCorporation({ companyNames });
   } catch (error) {
     logMarketDataError("corporation-lookup", error);
-    return mapCorporationFailure("unavailable", requestedCompanyName, statementDate);
+    return mapCorporationFailure(
+      "unavailable",
+      requestedCompanyName,
+      statementDate,
+      pendingAssessment,
+    );
   }
   if (corporationResult.status !== "success" || !corporationResult.company) {
     return mapCorporationFailure(
       corporationResult.status,
       requestedCompanyName,
       statementDate,
+      pendingAssessment,
     );
   }
   const corporation: OpenDartCorporation = corporationResult.company;
   if (!corporation.stockCode) {
-    return mapCorporationFailure("stock_not_listed", corporation.corpName, statementDate);
+    return mapCorporationFailure(
+      "stock_not_listed",
+      corporation.corpName,
+      statementDate,
+      pendingAssessment,
+    );
   }
 
   const resolution = await resolveKoreanMarket(corporation.stockCode);
@@ -457,13 +509,13 @@ export async function getPredictionMarketSnapshot({
         resolution.message,
         corporation.corpName,
         statementDate,
+        pendingAssessment,
       ),
     };
   }
 
-  const dueDate = calculateEvaluationDate(statementDate, predictionPeriod);
   const lastRequestedDate =
-    dueDate && compareDateStrings(dueDate, today) <= 0 ? dueDate : statementDate;
+    dueDate && isCompletedDailyDate(dueDate, now) ? dueDate : statementDate;
   const startDate = addCalendarDays(statementDate, -31);
   if (!startDate) {
     return predictionFailure(
@@ -471,6 +523,7 @@ export async function getPredictionMarketSnapshot({
       "발언 기준일을 확인해주세요.",
       corporation.corpName,
       statementDate,
+      pendingAssessment,
     );
   }
 
@@ -492,6 +545,7 @@ export async function getPredictionMarketSnapshot({
       stockHistory.message,
       corporation.corpName,
       statementDate,
+      pendingAssessment,
     );
   }
   if (!benchmarkHistory.ok) {
@@ -500,6 +554,7 @@ export async function getPredictionMarketSnapshot({
       benchmarkHistory.message,
       corporation.corpName,
       statementDate,
+      pendingAssessment,
     );
   }
   const priceAtStatement = latestBarOnOrBefore(stockHistory.bars, statementDate);
@@ -509,21 +564,38 @@ export async function getPredictionMarketSnapshot({
       "해당 기간의 주가 데이터를 찾지 못했습니다.",
       corporation.corpName,
       statementDate,
+      pendingAssessment,
     );
   }
-  const benchmarkBase = latestBarOnOrBefore(
-    benchmarkHistory.bars,
-    priceAtStatement.date,
-  );
-  const evaluationIsDue = dueDate !== null && compareDateStrings(dueDate, today) <= 0;
-  const evaluationPrice = evaluationIsDue
-    ? latestBarOnOrBefore(stockHistory.bars, dueDate)
-    : null;
-  const benchmarkEvaluation = evaluationIsDue
-    ? latestBarOnOrBefore(benchmarkHistory.bars, dueDate)
-    : null;
+  const targets = calculatePredictionTarget({
+    baseClose: priceAtStatement.close,
+    direction,
+    targetPrice,
+    targetReturnPercent,
+  });
+  const assessment = evaluatePredictionFromDailyBars({
+    benchmarkBars: benchmarkHistory.bars,
+    benchmarkName: resolution.benchmarkName,
+    direction,
+    dueDate,
+    now,
+    statementDate,
+    stockBars: stockHistory.bars,
+    targets,
+  });
+  const benchmarkBase =
+    assessment.status === "completed"
+      ? assessment.benchmarkBasePrice
+      : latestBarOnOrBefore(benchmarkHistory.bars, priceAtStatement.date);
+  const evaluationPrice =
+    assessment.status === "completed" ? assessment.evaluationPrice : null;
+  const benchmarkEvaluation =
+    assessment.status === "completed"
+      ? assessment.benchmarkEvaluationPrice
+      : null;
 
   return {
+    assessment,
     benchmark: {
       basePrice: benchmarkBase,
       evaluationPrice: benchmarkEvaluation,
@@ -550,11 +622,6 @@ export async function getPredictionMarketSnapshot({
     statementDate,
     stockCode: corporation.stockCode,
     symbol: resolution.symbol,
-    targets: calculatePredictionTarget({
-      baseClose: priceAtStatement.close,
-      direction,
-      targetPrice,
-      targetReturnPercent,
-    }),
+    targets,
   };
 }

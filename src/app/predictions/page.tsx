@@ -75,10 +75,16 @@ export default async function PredictionsPage({ searchParams }: PageProps) {
         <DemoNotice
           compact
           className="mb-6"
-          title={marketDataResult.ok ? "실제 데이터와 데모 데이터 구분" : "시장데이터 조회 안내"}
+          title={marketDataResult.assessment.status === "completed"
+            ? "실제 시장데이터 기반 평가"
+            : marketDataResult.ok
+              ? "실제 데이터와 데모 데이터 구분"
+              : "시장데이터 조회 안내"}
           description={
-            marketDataResult.ok
-              ? "선택한 예측의 발언일 종가와 기준지수는 실제 시장데이터입니다. 기존 예측 목록과 사후 성과 평가는 아직 데모 데이터입니다."
+            marketDataResult.assessment.status === "completed"
+              ? "선택한 예측은 실제 일별 주가와 기준지수로 사후평가했습니다. 나머지 기존 예시 카드의 성과값은 데모 데이터입니다."
+              : marketDataResult.ok
+                ? "선택한 예측의 발언일 종가와 기준지수는 실제 시장데이터입니다. 미래 예측은 평가 예정일까지 추적 중으로 유지합니다."
               : "선택한 예측은 실제 주가를 확인하지 못했으며 다른 종목의 데모 가격으로 대체하지 않습니다. 기존 목록의 예시 카드는 데모 데이터입니다."
           }
         />
@@ -106,7 +112,7 @@ export default async function PredictionsPage({ searchParams }: PageProps) {
           </span>
           <div>
             <h2 id="method-title" className="text-base font-black text-ink">평가 방식</h2>
-            <p className="mt-2 text-sm leading-6 text-muted">현재 데모는 발언일 종가와 평가일 종가를 비교하며 배당·세금·거래비용을 반영하지 않습니다. 실제 서비스에서는 거래정지, 액면분할 등 가격 조정 기준도 함께 공개할 예정입니다.</p>
+            <p className="mt-2 text-sm leading-6 text-muted">실제 입력 평가는 발언일과 평가일의 종가, 기간 중 고가·저가 및 같은 시장의 기준지수를 사용합니다. 배당·세금·거래비용은 반영하지 않으며, 기존 예시 카드의 성과값은 데모 데이터입니다.</p>
           </div>
         </div>
       </section>

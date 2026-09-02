@@ -2,9 +2,18 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { AlertTriangle, CheckCircle2, Clock3, Layers3 } from "lucide-react";
+import {
+  AlertTriangle,
+  CalendarClock,
+  CheckCircle2,
+  Clock3,
+  Layers3,
+} from "lucide-react";
 import { AnalysisInputSummary } from "@/components/analysis-input-summary";
-import { PredictionCard } from "@/components/prediction-card";
+import {
+  PredictionCard,
+  type PredictionEvaluation as PredictionCardEvaluation,
+} from "@/components/prediction-card";
 import { PredictionMarketData } from "@/components/prediction-market-data";
 import { mockDatabase } from "@/data/mock-data";
 import { getPredictionAnalysisOverrides } from "@/lib/ai/prediction-overrides";
@@ -13,20 +22,70 @@ import { formatKoreanDate, getPredictionView } from "@/lib/stocktrace";
 import type { PredictionMarketSnapshotResult } from "@/lib/market-data/types";
 import type { PredictionStatus } from "@/types/stocktrace";
 
-type Filter = "all" | "active" | "completed" | "insufficient";
+type Filter = "all" | "active" | "completed" | "review" | "insufficient";
 
 const filters: Array<{ id: Filter; label: string; icon: typeof Layers3 }> = [
   { id: "all", label: "전체", icon: Layers3 },
   { id: "active", label: "추적 중", icon: Clock3 },
   { id: "completed", label: "평가 완료", icon: CheckCircle2 },
+  { id: "review", label: "데이터 확인 필요", icon: CalendarClock },
   { id: "insufficient", label: "조건 불충분", icon: AlertTriangle },
 ];
 
 function filterForStatus(status?: PredictionStatus): Filter {
   if (status === "completed") return "completed";
+  if (status === "evaluation_due") return "review";
   if (status === "insufficient_conditions") return "insufficient";
-  if (status === "tracking" || status === "evaluation_due") return "active";
+  if (status === "tracking") return "active";
   return "all";
+}
+
+function resolveEffectiveStatus(
+  fallbackStatus: PredictionStatus,
+  overrideStatus: PredictionStatus | null,
+  marketDataResult: PredictionMarketSnapshotResult | null,
+): PredictionStatus {
+  if (!overrideStatus) return fallbackStatus;
+  if (overrideStatus === "insufficient_conditions") {
+    return "insufficient_conditions";
+  }
+  if (marketDataResult?.assessment.status === "completed") return "completed";
+  if (marketDataResult?.assessment.status === "unavailable") {
+    return "evaluation_due";
+  }
+  if (marketDataResult?.assessment.status === "tracking") return "tracking";
+  return overrideStatus;
+}
+
+function toActualCardEvaluation(
+  result: PredictionMarketSnapshotResult | null,
+): PredictionCardEvaluation | undefined {
+  if (!result?.ok || result.assessment.status !== "completed") return undefined;
+  const assessment = result.assessment;
+  return {
+    actualReturnPct: assessment.actualReturnPct,
+    benchmarkName: result.benchmark.name,
+    benchmarkReturnPct: assessment.benchmarkReturnPct,
+    dataMode: "actual",
+    endPrice: {
+      amount: assessment.evaluationPrice.close,
+      currency: "KRW",
+    },
+    evaluatedAt: formatKoreanDate(assessment.evaluationPrice.date),
+    excessReturnPct: assessment.excessReturnPct,
+    finalAssessment: assessment.finalAssessment,
+    maxDrawdownPct: assessment.maxDrawdownPct,
+    methodologyNote: assessment.methodologyNote,
+    observedHighPrice: {
+      amount: assessment.periodHighPrice,
+      currency: "KRW",
+    },
+    observedLowPrice: {
+      amount: assessment.periodLowPrice,
+      currency: "KRW",
+    },
+    targetReached: assessment.targetReached,
+  };
 }
 
 export function PredictionExplorer({
@@ -45,13 +104,39 @@ export function PredictionExplorer({
     [],
   );
   const focusedView = views.find(({ prediction }) => prediction.id === focusId);
-  const [filter, setFilter] = useState<Filter>(() => filterForStatus(focusedView?.prediction.status));
+  const focusedOverrides = focusedView
+    ? getPredictionAnalysisOverrides(analysisInput)
+    : null;
+  const focusedEffectiveStatus = focusedView
+    ? resolveEffectiveStatus(
+        focusedView.prediction.status,
+        focusedOverrides?.status ?? null,
+        marketDataResult,
+      )
+    : undefined;
+  const filterKey = focusId
+    ? `${focusId}:${focusedEffectiveStatus ?? "unknown"}`
+    : "no-focus";
+  const defaultFilter = filterForStatus(focusedEffectiveStatus);
+  const [filterSelection, setFilterSelection] = useState<{
+    key: string;
+    value: Filter;
+  }>(() => ({ key: filterKey, value: defaultFilter }));
+  const filter =
+    filterSelection.key === filterKey ? filterSelection.value : defaultFilter;
+  const setFilter = (value: Filter) =>
+    setFilterSelection({ key: filterKey, value });
+
+  const statusForPrediction = (id: string, status: PredictionStatus) =>
+    id === focusId && focusedEffectiveStatus ? focusedEffectiveStatus : status;
 
   const filtered = views.filter(({ prediction }) => {
+    const status = statusForPrediction(prediction.id, prediction.status);
     if (filter === "all") return true;
-    if (filter === "active") return prediction.status === "tracking" || prediction.status === "evaluation_due";
-    if (filter === "completed") return prediction.status === "completed";
-    return prediction.status === "insufficient_conditions";
+    if (filter === "active") return status === "tracking";
+    if (filter === "completed") return status === "completed";
+    if (filter === "review") return status === "evaluation_due";
+    return status === "insufficient_conditions";
   });
 
   useEffect(() => {
@@ -69,7 +154,13 @@ export function PredictionExplorer({
           <AnalysisInputSummary input={analysisInput} />
           {analysisInput.structuredAnalysis && (
             <p className="mt-2 rounded-xl border border-blue-100 bg-blue-50/70 px-3.5 py-2.5 text-xs font-semibold leading-5 text-blue-900">
-              {analysisInput.analysisMode === "ai" ? "AI 실제 분석" : "데모 분석"}에서 추출한 예측 조건을 카드에 반영했습니다. {marketDataResult?.ok ? "발언일 종가와 기준지수는 실제 시장데이터이며, 사후 평가는 아직 자동 생성하지 않습니다." : "실제 주가 조회 결과는 선택한 카드에서 별도로 안내합니다."}
+              {analysisInput.analysisMode === "ai" ? "AI 실제 분석" : "데모 분석"}에서 추출한 예측 조건을 카드에 반영했습니다. {marketDataResult?.assessment.status === "completed"
+                ? "실제 시장데이터로 사후평가를 완료했습니다."
+                : marketDataResult?.ok && marketDataResult.assessment.status === "tracking"
+                  ? "발언일 종가와 기준지수는 실제 시장데이터이며, 미래 가격은 미리 평가하지 않습니다."
+                  : marketDataResult?.assessment.status === "unavailable"
+                    ? "평가기간은 끝났지만 실제 평가 데이터를 충분히 확인하지 못했습니다."
+                    : "실제 주가 조회 결과는 선택한 카드에서 별도로 안내합니다."}
             </p>
           )}
         </div>
@@ -79,10 +170,12 @@ export function PredictionExplorer({
           const active = filter === item.id;
           const Icon = item.icon;
           const count = views.filter(({ prediction }) => {
+            const status = statusForPrediction(prediction.id, prediction.status);
             if (item.id === "all") return true;
-            if (item.id === "active") return prediction.status === "tracking" || prediction.status === "evaluation_due";
-            if (item.id === "completed") return prediction.status === "completed";
-            return prediction.status === "insufficient_conditions";
+            if (item.id === "active") return status === "tracking";
+            if (item.id === "completed") return status === "completed";
+            if (item.id === "review") return status === "evaluation_due";
+            return status === "insufficient_conditions";
           }).length;
           return (
             <button
@@ -104,8 +197,19 @@ export function PredictionExplorer({
         {filtered.map(({ prediction, statement, influencer, stock }) => {
           const focused = focusId === prediction.id;
           const overrides = focused ? getPredictionAnalysisOverrides(analysisInput) : null;
-          const evaluation = overrides ? undefined : prediction.evaluation;
+          const actualEvaluation = focused
+            ? toActualCardEvaluation(marketDataResult)
+            : undefined;
+          const evaluation: PredictionCardEvaluation | undefined = overrides
+            ? actualEvaluation
+            : prediction.evaluation
+              ? { ...prediction.evaluation, dataMode: "demo" }
+              : undefined;
           const actualMarket = focused && marketDataResult?.ok ? marketDataResult : null;
+          const effectiveStatus = statusForPrediction(
+            prediction.id,
+            prediction.status,
+          );
           const calculatedTargetPrice = actualMarket?.targets.calculatedTargetPrice ?? null;
           return (
             <div
@@ -151,7 +255,18 @@ export function PredictionExplorer({
                         sourceLabel: actualMarket.provider.displayName,
                         dataMode: "actual",
                       }
-                    : {
+                    : overrides
+                      ? {
+                          capturedAt: analysisInput?.statementDate
+                            ? formatKoreanDate(analysisInput.statementDate)
+                            : "기준일 미지정",
+                          sourceLabel:
+                            marketDataResult && !marketDataResult.ok
+                              ? marketDataResult.message
+                              : "실제 주가를 확인하지 못했습니다.",
+                          dataMode: "unavailable",
+                        }
+                      : {
                         ...prediction.priceAtStatement,
                         capturedAt: formatKoreanDate(prediction.priceAtStatement.capturedAt),
                         dataMode: "demo",
@@ -165,19 +280,22 @@ export function PredictionExplorer({
                     : prediction.targetPrice,
                   horizonLabel: overrides ? overrides.horizonLabel : prediction.horizonLabel,
                   evaluationDueAt: overrides
-                    ? actualMarket?.evaluation.dueDate
-                      ? formatKoreanDate(actualMarket.evaluation.dueDate)
+                    ? marketDataResult?.assessment.dueDate
+                      ? formatKoreanDate(marketDataResult.assessment.dueDate)
                       : undefined
                     : prediction.evaluationDueAt
                       ? formatKoreanDate(prediction.evaluationDueAt)
                       : undefined,
                   missingConditions: overrides ? overrides.missingConditions : prediction.missingConditions,
-                  status: overrides ? overrides.status : prediction.status,
+                  status: effectiveStatus,
                   evaluation:
                     evaluation && evaluation.targetReached !== null
                       ? {
                           ...evaluation,
-                          evaluatedAt: formatKoreanDate(evaluation.evaluatedAt),
+                          evaluatedAt:
+                            evaluation.dataMode === "actual"
+                              ? evaluation.evaluatedAt
+                              : formatKoreanDate(evaluation.evaluatedAt),
                           targetReached: evaluation.targetReached,
                         }
                       : undefined,

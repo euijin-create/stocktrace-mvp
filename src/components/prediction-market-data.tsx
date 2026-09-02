@@ -35,6 +35,11 @@ export function PredictionMarketData({
           <div className="min-w-0">
             <p className="text-sm font-extrabold text-ink">실제 시장데이터 조회 불가</p>
             <p className="mt-1 text-xs leading-5 text-slate-700">{result.message}</p>
+            {result.assessment.status === "unavailable" ? (
+              <p className="mt-1 text-xs leading-5 text-slate-700">
+                {result.assessment.message}
+              </p>
+            ) : null}
             <p className="mt-1.5 text-[11px] leading-5 text-muted">
               실제 가격 대신 다른 종목의 데모 가격을 표시하지 않습니다. 데이터 제공자 · {result.provider.displayName}
             </p>
@@ -45,6 +50,7 @@ export function PredictionMarketData({
   }
 
   const targetPrice = result.targets.statedTargetPrice ?? result.targets.calculatedTargetPrice;
+  const assessment = result.assessment;
   const targetLabel = result.targets.statedTargetPrice !== null
     ? "발언에서 제시한 목표가격"
     : result.targets.calculatedTargetPrice !== null
@@ -68,7 +74,7 @@ export function PredictionMarketData({
           </div>
         </div>
         <span className="inline-flex w-fit items-center gap-1.5 rounded-full bg-white px-2.5 py-1 text-[11px] font-extrabold text-emerald-800 ring-1 ring-inset ring-emerald-200">
-          <CheckCircle2 aria-hidden="true" className="size-3.5" /> 실제 주가 데이터
+          <CheckCircle2 aria-hidden="true" className="size-3.5" /> {assessment.status === "completed" ? "실제 시장데이터 기반 평가" : "실제 주가 데이터"}
         </span>
       </div>
 
@@ -118,9 +124,11 @@ export function PredictionMarketData({
                 <PlainMetric
                   label="평가일 데이터 기반"
                   value={
-                    result.evaluation.price
-                      ? `${result.evaluation.price.date} 종가 ${formatWon(result.evaluation.price.close)}`
-                      : "평가 예정일 이후 조회 가능"
+                    assessment.status === "completed"
+                      ? `${assessment.evaluationPrice.date} 종가 ${formatWon(assessment.evaluationPrice.close)}`
+                      : assessment.status === "tracking"
+                        ? "평가 예정일 이후 조회 가능"
+                        : "평가 데이터 확인 필요"
                   }
                 />
               </div>
@@ -129,7 +137,11 @@ export function PredictionMarketData({
         ) : null}
 
         <p className="mt-3 text-[11px] leading-5 text-muted">
-          {result.provider.note}입니다. 일별 원시 종가를 사용하며, 이 단계에서는 사후 성공·실패를 자동 판정하지 않습니다.
+          {result.provider.note}입니다. {assessment.status === "completed"
+            ? "평가기간의 실제 일별 데이터로 수익률과 목표 도달 여부를 계산했습니다."
+            : assessment.status === "tracking"
+              ? "미래 가격을 미리 조회하거나 성공·실패를 판정하지 않습니다."
+              : assessment.message}
         </p>
       </div>
     </section>

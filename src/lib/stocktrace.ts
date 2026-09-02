@@ -125,8 +125,8 @@ export const PREDICTION_STATUS_META: Record<PredictionStatus, DisplayMeta> = {
     iconHint: "radar",
   },
   [PREDICTION_STATUS.EVALUATION_DUE]: {
-    label: "평가 대기",
-    description: "예측기간이 끝나 결과 데이터 반영을 기다리고 있습니다.",
+    label: "평가 데이터 확인 필요",
+    description: "예측기간은 끝났지만 실제 평가 데이터를 충분히 확인하지 못했습니다.",
     tone: "caution",
     iconHint: "clock",
   },

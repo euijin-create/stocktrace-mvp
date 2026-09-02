@@ -109,6 +109,13 @@ export function isCompletedDailyDate(date: string, now = new Date()): boolean {
   const today = toKoreanMarketDate(now);
   if (date < today) return true;
   if (date > today) return false;
+  const parsed = parseStrictDate(date);
+  if (parsed) {
+    const weekday = new Date(
+      Date.UTC(parsed.year, parsed.month - 1, parsed.day),
+    ).getUTCDay();
+    if (weekday === 0 || weekday === 6) return true;
+  }
   const parts = new Intl.DateTimeFormat("en-US", {
     hour: "2-digit",
     hourCycle: "h23",

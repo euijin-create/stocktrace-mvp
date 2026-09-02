@@ -20,13 +20,17 @@ import {
 } from "lucide-react";
 import { AiStatementClassification } from "@/components/ai-statement-classification";
 import { AnalysisInputSummary } from "@/components/analysis-input-summary";
-import { PredictionCard } from "@/components/prediction-card";
+import {
+  PredictionCard,
+  type PredictionEvaluation as PredictionCardEvaluation,
+} from "@/components/prediction-card";
 import { PredictionMarketData } from "@/components/prediction-market-data";
 import { DemoNotice } from "@/components/ui/demo-notice";
 import { StatusBadge, type StatusTone } from "@/components/ui/status-badge";
 import { predictions } from "@/data/mock-data";
 import { getPredictionAnalysisOverrides } from "@/lib/ai/prediction-overrides";
 import { getPredictionMarketSnapshot } from "@/lib/market-data";
+import type { PredictionMarketSnapshotResult } from "@/lib/market-data/types";
 import {
   appendAnalysisInput,
   readAnalysisInputFromRecord,
@@ -55,6 +59,53 @@ const toneMap: Record<SemanticTone, StatusTone> = {
   negative: "danger",
   neutral: "neutral",
 };
+
+function toActualEvaluation(
+  result: PredictionMarketSnapshotResult | null,
+): PredictionCardEvaluation | undefined {
+  if (!result?.ok || result.assessment.status !== "completed") return undefined;
+  const assessment = result.assessment;
+  return {
+    actualReturnPct: assessment.actualReturnPct,
+    benchmarkName: result.benchmark.name,
+    benchmarkReturnPct: assessment.benchmarkReturnPct,
+    dataMode: "actual",
+    endPrice: {
+      amount: assessment.evaluationPrice.close,
+      currency: "KRW",
+    },
+    evaluatedAt: assessment.evaluationPrice.date,
+    excessReturnPct: assessment.excessReturnPct,
+    finalAssessment: assessment.finalAssessment,
+    maxDrawdownPct: assessment.maxDrawdownPct,
+    methodologyNote: assessment.methodologyNote,
+    observedHighPrice: {
+      amount: assessment.periodHighPrice,
+      currency: "KRW",
+    },
+    observedLowPrice: {
+      amount: assessment.periodLowPrice,
+      currency: "KRW",
+    },
+    targetReached: assessment.targetReached,
+  };
+}
+
+const ACTUAL_FINAL_RESULT_LABEL = {
+  direction_only_correct: "방향만 맞음",
+  target_achieved: "목표 달성",
+  target_not_achieved: "목표 미달성",
+} as const;
+
+function formatEvaluationMoney(
+  money: PredictionCardEvaluation["endPrice"],
+): string {
+  return new Intl.NumberFormat("ko-KR", {
+    currency: money.currency,
+    maximumFractionDigits: 0,
+    style: "currency",
+  }).format(money.amount);
+}
 
 export function generateStaticParams() {
   return predictions.map(({ id }) => ({ id }));
@@ -115,8 +166,25 @@ export default async function PredictionDetailPage({ params, searchParams }: Pag
   const displayedMissingConditions = overrides
     ? overrides.missingConditions
     : prediction.missingConditions;
-  const displayedStatus = overrides ? overrides.status : prediction.status;
-  const evaluation = overrides ? undefined : prediction.evaluation;
+  const actualEvaluation = toActualEvaluation(marketDataResult);
+  const displayedStatus = overrides
+    ? overrides.status === "insufficient_conditions"
+      ? "insufficient_conditions"
+      : marketDataResult?.assessment.status === "completed"
+        ? "completed"
+        : marketDataResult?.assessment.status === "unavailable"
+          ? "evaluation_due"
+          : "tracking"
+    : prediction.status;
+  const evaluation: PredictionCardEvaluation | undefined = overrides
+    ? actualEvaluation
+    : prediction.evaluation
+      ? { ...prediction.evaluation, dataMode: "demo" }
+      : undefined;
+  const completedAssessment =
+    actualMarket?.assessment.status === "completed"
+      ? actualMarket.assessment
+      : null;
   const statusMeta = PREDICTION_STATUS_META[displayedStatus];
   const targetSummary = displayedTargetReturn !== undefined
     ? formatPercent(displayedTargetReturn)
@@ -130,15 +198,29 @@ export default async function PredictionDetailPage({ params, searchParams }: Pag
   const targetReachedLabel = evaluation?.targetReached === null
     ? "평가 제외"
     : evaluation?.targetReached
-      ? "도달"
+      ? "달성"
       : evaluation
-        ? "미도달"
+        ? "미달성"
         : displayedStatus === "insufficient_conditions"
           ? "평가 제외"
-          : "평가 전";
+          : displayedStatus === "evaluation_due"
+            ? "확인 필요"
+            : "평가 전";
+  const unevaluatedResultLabel = displayedStatus === "insufficient_conditions"
+    ? "평가 제외"
+    : displayedStatus === "evaluation_due"
+      ? "확인 필요"
+      : "평가 전";
   const cardEvaluation = evaluation && evaluation.targetReached !== null
     ? { ...evaluation, evaluatedAt: formatKoreanDate(evaluation.evaluatedAt), targetReached: evaluation.targetReached }
     : undefined;
+  const displayedEvaluationDueAt = overrides
+    ? marketDataResult?.assessment.dueDate
+      ? formatKoreanDate(marketDataResult.assessment.dueDate)
+      : undefined
+    : prediction.evaluationDueAt
+      ? formatKoreanDate(prediction.evaluationDueAt)
+      : undefined;
   const displayedStatementDate = analysisInput?.statementDate
     ? formatKoreanDate(analysisInput.statementDate)
     : formatKoreanDate(prediction.statedAt);
@@ -169,9 +251,9 @@ export default async function PredictionDetailPage({ params, searchParams }: Pag
           dataMode: "demo" as const,
         };
 
-  const priceRange = evaluation && displayedTargetPrice
+  const priceRange = evaluation && displayedTargetPrice && displayedPriceAtStatement.price
     ? buildPriceRange(
-        prediction.priceAtStatement.price.amount,
+        displayedPriceAtStatement.price.amount,
         evaluation.observedLowPrice?.amount,
         evaluation.observedHighPrice?.amount,
         evaluation.endPrice.amount,
@@ -239,16 +321,21 @@ export default async function PredictionDetailPage({ params, searchParams }: Pag
         </div>
 
         <div className="p-5 sm:p-7">
+          {completedAssessment ? (
+            <p className="mb-4 inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-extrabold text-emerald-800 ring-1 ring-inset ring-emerald-200">
+              실제 시장데이터 기반 평가
+            </p>
+          ) : null}
           <dl className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <OverviewMetric label="예측 목표" value={targetSummary} detail={targetDetail || "목표 조건 확인 필요"} />
             <OverviewMetric
               label="실제 결과"
-              value={evaluation ? formatPercent(evaluation.actualReturnPct) : displayedStatus === "insufficient_conditions" ? "평가 제외" : "평가 전"}
+              value={evaluation ? formatPercent(evaluation.actualReturnPct) : unevaluatedResultLabel}
               detail={evaluation ? `${formatKoreanDate(evaluation.evaluatedAt)} 기준` : statusMeta.description}
             />
             <OverviewMetric
               label="시장 대비 성과"
-              value={evaluation ? formatPercentPoint(evaluation.excessReturnPct) : displayedStatus === "insufficient_conditions" ? "평가 제외" : "평가 전"}
+              value={evaluation ? formatPercentPoint(evaluation.excessReturnPct) : unevaluatedResultLabel}
               detail={evaluation ? `${evaluation.benchmarkName} ${formatPercent(evaluation.benchmarkReturnPct)}` : statusMeta.description}
             />
             <OverviewMetric label="목표 도달 여부" value={targetReachedLabel} detail={statusMeta.label} />
@@ -256,7 +343,12 @@ export default async function PredictionDetailPage({ params, searchParams }: Pag
 
           <div className="mt-5 rounded-2xl bg-[#102f3e] p-5 text-white">
             <p className="text-xs font-bold text-cyan-200">최종 평가</p>
-            <p className="mt-2 text-[15px] font-semibold leading-7">
+            {completedAssessment ? (
+              <p className="mt-2 text-lg font-black">
+                {ACTUAL_FINAL_RESULT_LABEL[completedAssessment.finalResult]}
+              </p>
+            ) : null}
+            <p className={`${completedAssessment ? "mt-1" : "mt-2"} text-[15px] font-semibold leading-7`}>
               {evaluation?.finalAssessment ?? statusMeta.description}
             </p>
           </div>
@@ -272,10 +364,20 @@ export default async function PredictionDetailPage({ params, searchParams }: Pag
       <DemoNotice
         compact
         className="mt-4"
-        title={actualMarket ? "실제 데이터와 데모 데이터 구분" : analysisInput?.analysisMode === "ai" ? "AI 분석과 데모 데이터 구분" : "데모 데이터 안내"}
+        title={completedAssessment
+          ? "실제 시장데이터 기반 평가"
+          : actualMarket
+            ? "실제 데이터와 데모 데이터 구분"
+            : analysisInput?.analysisMode === "ai"
+              ? "AI 분석과 데모 데이터 구분"
+              : "데모 데이터 안내"}
         description={
-          actualMarket
-            ? "방향·목표·기간은 Gemini가 발언에서 추출했고, 발언일 종가와 기준지수는 실제 시장데이터입니다. 기존 사후 성과 평가는 아직 데모이며 이 입력에는 자동 적용하지 않습니다."
+          completedAssessment
+            ? `방향·목표·기간은 ${analysisInput?.analysisMode === "ai" ? "Gemini가" : "데모 분석이"} 발언에서 추출했고, 시작·평가 가격과 기간 중 고가·저가 및 기준지수는 실제 시장데이터입니다. 기존 데모 사후평가 값은 이 결과에 섞지 않았습니다.`
+            : actualMarket?.assessment.status === "tracking"
+              ? `방향·목표·기간은 ${analysisInput?.analysisMode === "ai" ? "Gemini가" : "데모 분석이"} 발언에서 추출했고 발언일 종가와 기준지수는 실제 시장데이터입니다. 평가 예정일 전에는 미래 가격을 조회하거나 결과를 미리 판정하지 않습니다.`
+              : actualMarket?.assessment.status === "unavailable"
+                ? `${actualMarket.assessment.message} 다른 예측의 데모 성과값으로 대체하지 않습니다.`
             : analysisInput?.analysisMode === "ai"
               ? "방향·목표 수익률·목표가격·예측 기간은 Gemini가 실제 발언에서 추출했습니다. 실제 주가를 확인하지 못한 경우 다른 종목의 데모 가격으로 대체하지 않습니다."
             : undefined
@@ -354,14 +456,33 @@ export default async function PredictionDetailPage({ params, searchParams }: Pag
                   <p className="number-tabular mt-1 font-black text-cyan-200">{formatPercentPoint(evaluation.excessReturnPct)}</p>
                 </div>
               </div>
+              {completedAssessment ? (
+                <dl className="mt-4 grid gap-3 border-t border-line pt-4 sm:grid-cols-2">
+                  <PlainEvaluationMetric
+                    label={`${evaluation.benchmarkName} 시작 지수`}
+                    value={`${completedAssessment.benchmarkBasePrice.close.toLocaleString("ko-KR", { maximumFractionDigits: 2 })} · ${formatKoreanDate(completedAssessment.benchmarkBasePrice.date)}`}
+                  />
+                  <PlainEvaluationMetric
+                    label={`${evaluation.benchmarkName} 종료 지수`}
+                    value={`${completedAssessment.benchmarkEvaluationPrice.close.toLocaleString("ko-KR", { maximumFractionDigits: 2 })} · ${formatKoreanDate(completedAssessment.benchmarkEvaluationPrice.date)}`}
+                  />
+                </dl>
+              ) : null}
               <p className="mt-4 text-xs leading-5 text-muted">목표가 미도달과 시장 대비 초과성과는 서로 다른 지표입니다. 둘 중 하나만으로 예측 전체를 평가하지 않습니다.</p>
             </div>
           </div>
 
           <div className="mt-5 grid gap-3 sm:grid-cols-3">
-            <ResultNote icon={CalendarDays} title="평가 기준일" value={formatKoreanDate(evaluation.evaluatedAt)} description="사전에 기록된 예측기간 종료일" />
-            <ResultNote icon={Gauge} title="최대하락률" value={formatPercent(evaluation.maxDrawdownPct)} description="평가기간 중 발언일 가격 대비 저점" />
-            <ResultNote icon={Target} title="목표가격 도달" value={evaluation.targetReached ? "도달" : "미도달"} description="기간 중 고가를 포함해 확인" />
+            <ResultNote icon={CalendarDays} title="평가 예정일" value={displayedEvaluationDueAt ?? "날짜 정보 없음"} description="발언일과 예측기간으로 계산" />
+            <ResultNote icon={CalendarDays} title="실제 평가 가격 기준일" value={formatKoreanDate(evaluation.evaluatedAt)} description="평가 예정일 이전 가장 가까운 거래일" />
+            {evaluation.observedHighPrice ? (
+              <ResultNote icon={LineChart} title="기간 최고가" value={formatEvaluationMoney(evaluation.observedHighPrice)} description="평가기간 일별 고가 중 최고" />
+            ) : null}
+            {evaluation.observedLowPrice ? (
+              <ResultNote icon={LineChart} title="기간 최저가" value={formatEvaluationMoney(evaluation.observedLowPrice)} description="평가기간 일별 저가 중 최저" />
+            ) : null}
+            <ResultNote icon={Gauge} title="최대하락률(MDD)" value={formatPercent(evaluation.maxDrawdownPct)} description="이전 최고 종가 대비 평가기간 최대 하락폭" />
+            <ResultNote icon={Target} title="기간 중 목표가 도달" value={evaluation.targetReached ? "달성" : "미달성"} description="상승은 고가, 하락은 저가로 확인" />
           </div>
         </section>
       ) : displayedStatus === "insufficient_conditions" ? (
@@ -391,6 +512,16 @@ export default async function PredictionDetailPage({ params, searchParams }: Pag
             ))}
           </ul>
           <p className="mt-5 flex gap-2 rounded-xl bg-blue-50 p-4 text-xs leading-5 text-blue-900"><Info aria-hidden="true" className="mt-0.5 size-4 shrink-0" /> 이 발언은 실패 예측으로 계산하지 않으며 인플루언서의 예측 성과 표본에서도 제외합니다.</p>
+        </section>
+      ) : displayedStatus === "evaluation_due" ? (
+        <section id="evaluation-unavailable" className="p-6 text-center" aria-labelledby="unavailable-title">
+          <AlertTriangle aria-hidden="true" className="mx-auto size-8 text-amber-700" />
+          <h2 id="unavailable-title" className="mt-3 text-lg font-black text-ink">평가 데이터 확인 필요</h2>
+          <p className="mt-2 text-sm leading-6 text-muted">
+            {marketDataResult?.assessment.status === "unavailable"
+              ? marketDataResult.assessment.message
+              : "평가기간은 끝났지만 현재 실제 시장데이터로 평가를 완료할 수 없습니다."}
+          </p>
         </section>
       ) : (
         <section id="evaluation-tracking" className="p-6 text-center" aria-labelledby="tracking-title">
@@ -427,13 +558,7 @@ export default async function PredictionDetailPage({ params, searchParams }: Pag
               targetReturnPct: displayedTargetReturn,
               targetPrice: displayedTargetPrice,
               horizonLabel: displayedHorizon,
-              evaluationDueAt: overrides
-                ? actualMarket?.evaluation.dueDate
-                  ? formatKoreanDate(actualMarket.evaluation.dueDate)
-                  : undefined
-                : prediction.evaluationDueAt
-                  ? formatKoreanDate(prediction.evaluationDueAt)
-                  : undefined,
+              evaluationDueAt: displayedEvaluationDueAt,
               missingConditions: displayedMissingConditions,
               status: displayedStatus,
               evaluation: cardEvaluation,
@@ -493,8 +618,25 @@ function ResultNote({ icon: Icon, title, value, description }: { icon: typeof Ca
   );
 }
 
+function PlainEvaluationMetric({
+  label,
+  value,
+}: {
+  label: string;
+  value: string;
+}) {
+  return (
+    <div className="min-w-0 rounded-xl bg-slate-50 p-3">
+      <dt className="text-[11px] font-semibold text-muted">{label}</dt>
+      <dd className="number-tabular mt-1 text-xs font-bold leading-5 text-ink">
+        {value}
+      </dd>
+    </div>
+  );
+}
+
 function buildPriceRange(start: number, low = start, high = start, end: number, target: number) {
-  const min = Math.min(low, start, end);
+  const min = Math.min(low, target, start, end);
   const max = Math.max(high, target, start, end);
   const padding = Math.max((max - min) * 0.12, 1);
   const lower = min - padding;

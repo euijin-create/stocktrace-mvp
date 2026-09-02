@@ -37,6 +37,7 @@ export interface PredictionPriceSnapshot {
 }
 
 export interface PredictionEvaluation {
+  dataMode?: "actual" | "demo";
   evaluatedAt: string;
   endPrice: PredictionMoney;
   observedHighPrice?: PredictionMoney;
@@ -90,7 +91,7 @@ const STATUS_META: Record<
     icon: Clock3,
   },
   evaluation_due: {
-    label: "평가 대기",
+    label: "평가 데이터 확인 필요",
     className: "bg-amber-50 text-amber-900 ring-amber-200",
     icon: CalendarClock,
   },
@@ -286,6 +287,12 @@ export function PredictionCard({
         </div>
       )}
 
+      {evaluation?.dataMode === "actual" ? (
+        <p className="mt-4 inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-extrabold text-emerald-800 ring-1 ring-inset ring-emerald-200">
+          <CheckCircle2 aria-hidden="true" className="size-3.5" /> 실제 시장데이터 기반 평가
+        </p>
+      ) : null}
+
       {evaluation && isSummaryCard ? (
         <section className="mt-4 rounded-2xl border border-slate-200 bg-slate-950 p-4 text-white" aria-label="예측 핵심 결과">
           <dl className={`grid grid-cols-2 gap-x-3 gap-y-4 ${isHomeSummary ? "sm:grid-cols-2" : "sm:grid-cols-3"}`}>
@@ -302,8 +309,8 @@ export function PredictionCard({
                 evaluation.targetReached === null
                   ? "평가 제외"
                   : evaluation.targetReached
-                    ? "도달"
-                    : "미도달"
+                    ? "달성"
+                    : "미달성"
               }
               icon={
                 evaluation.targetReached === null ? (
@@ -343,8 +350,8 @@ export function PredictionCard({
                 evaluation.targetReached === null
                   ? "평가 제외"
                   : evaluation.targetReached
-                    ? "도달"
-                    : "미도달"
+                    ? "달성"
+                    : "미달성"
               }
               icon={
                 evaluation.targetReached === null ? (
