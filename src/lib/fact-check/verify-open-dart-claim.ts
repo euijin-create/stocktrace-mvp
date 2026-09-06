@@ -182,6 +182,7 @@ export async function verifyOpenDartClaim({
         },
       ];
     }),
+    normalizedStatement,
   );
   if (evidenceDocuments.length === 0) {
     return outcome(lookup, {

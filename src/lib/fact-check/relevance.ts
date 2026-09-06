@@ -74,7 +74,24 @@ function statementTokens(statement: string): string[] {
     .normalize("NFKC")
     .toLocaleLowerCase("ko-KR")
     .match(/[가-힣a-z]+|\d+(?:\.\d+)?/g);
-  return [...new Set((tokens ?? []).filter((token) => token.length >= 2 && !STOP_WORDS.has(token)))];
+  return [
+    ...new Set(
+      (tokens ?? []).filter(
+        (token) => !/^\d/.test(token) && token.length >= 2 && !STOP_WORDS.has(token),
+      ),
+    ),
+  ];
+}
+
+function numericTokens(value: string): string[] {
+  return [
+    ...new Set(
+      (value
+        .normalize("NFKC")
+        .match(/\d{1,3}(?:,\d{3})+(?:\.\d+)?|\d+(?:\.\d+)?/g) ?? [])
+        .map((token) => token.replaceAll(",", "")),
+    ),
+  ];
 }
 
 function activeConcepts(statement: string): RelevanceConcept[] {
@@ -139,12 +156,13 @@ function buildEvidenceTerms(statement: string): string[] {
 
 function scoreLine(line: string, terms: string[], numberTokens: string[]): number {
   const normalizedLine = normalize(line);
+  const lineNumbers = new Set(numericTokens(line));
   let score = 0;
   for (const term of terms) {
     if (term.length >= 2 && normalizedLine.includes(term)) score += 2;
   }
   for (const number of numberTokens) {
-    if (normalizedLine.includes(number)) score += 7;
+    if (lineNumbers.has(number)) score += 7;
   }
   return score;
 }
@@ -155,14 +173,18 @@ export function extractRelevantExcerpts(
 ): string[] {
   const lines = splitLongLines(plainText);
   const terms = buildEvidenceTerms(statement);
-  const numbers = statement
-    .normalize("NFKC")
-    .replaceAll(",", "")
-    .match(/\d+(?:\.\d+)?/g) ?? [];
+  const numbers = numericTokens(statement);
   if (lines.length === 0 || terms.length === 0) return [];
 
   const candidates = lines
-    .map((line, index) => ({ index, score: scoreLine(line, terms, numbers) }))
+    .map((line, index) => {
+      const lineNumbers = new Set(numericTokens(line));
+      return {
+        hasExactNumber: numbers.some((number) => lineNumbers.has(number)),
+        index,
+        score: scoreLine(line, terms, numbers),
+      };
+    })
     .filter(({ score }) => score >= 2)
     .sort((left, right) => right.score - left.score || left.index - right.index);
 
@@ -170,8 +192,8 @@ export function extractRelevantExcerpts(
   const usedCenters: number[] = [];
   for (const candidate of candidates) {
     if (usedCenters.some((center) => Math.abs(center - candidate.index) <= 2)) continue;
-    const from = Math.max(0, candidate.index - 2);
-    const to = Math.min(lines.length, candidate.index + 4);
+    const from = Math.max(0, candidate.index - (candidate.hasExactNumber ? 4 : 2));
+    const to = Math.min(lines.length, candidate.index + (candidate.hasExactNumber ? 10 : 4));
     const excerpt = lines.slice(from, to).join("\n").slice(0, MAX_EXCERPT_CHARACTERS).trim();
     if (excerpt.length < 20 || excerpts.includes(excerpt)) continue;
     excerpts.push(excerpt);
@@ -183,10 +205,28 @@ export function extractRelevantExcerpts(
 
 export function limitEvidenceDocuments(
   documents: VerificationEvidenceDocument[],
+  statement?: string,
 ): VerificationEvidenceDocument[] {
+  const expectedNumbers = statement ? numericTokens(statement) : [];
+  const orderedDocuments = expectedNumbers.length > 0
+    ? documents
+        .map((document, index) => {
+          const documentNumbers = new Set(numericTokens(document.excerpts.join("\n")));
+          return {
+            document,
+            exactNumberMatches: expectedNumbers.filter((number) => documentNumbers.has(number)).length,
+            index,
+          };
+        })
+        .sort(
+          (left, right) =>
+            right.exactNumberMatches - left.exactNumberMatches || left.index - right.index,
+        )
+        .map(({ document }) => document)
+    : documents;
   let remaining = MAX_TOTAL_EXCERPT_CHARACTERS;
   const result: VerificationEvidenceDocument[] = [];
-  for (const document of documents) {
+  for (const document of orderedDocuments) {
     const excerpts: string[] = [];
     for (const excerpt of document.excerpts) {
       if (remaining < 20) break;

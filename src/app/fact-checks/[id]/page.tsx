@@ -110,6 +110,7 @@ export default async function FactCheckPage({ params, searchParams }: PageProps)
       : null;
   const openDartResult = structuredFact
     ? await lookupOpenDartDisclosures({
+        asOfDate: analysisInput?.statementDate,
         companyNames: [structuredFact.stockName, structuredFact.company],
         limit: 40,
       })
@@ -124,6 +125,13 @@ export default async function FactCheckPage({ params, searchParams }: PageProps)
   const liveVerification =
     actualFactCheck?.status === "success" ? actualFactCheck.result : null;
   const isLiveVerification = liveVerification !== null;
+  const isLiveVerificationUnavailable =
+    analysisInput?.analysisMode === "ai" &&
+    structuredFact !== null &&
+    !isLiveVerification;
+  const unavailableMessage =
+    actualFactCheck?.message ??
+    "기업 또는 관련 공식자료를 확인하지 못해 OpenDART 공식자료 검증을 완료하지 못했습니다.";
   const displayedOpenDartResult = openDartResult
     ? {
         ...openDartResult,
@@ -137,14 +145,16 @@ export default async function FactCheckPage({ params, searchParams }: PageProps)
     analysisInput?.analysisMode === "ai"
       ? isLiveVerification
         ? "Gemini의 발언 분류와 OpenDART 공시 원문 기반 비교는 실제 분석입니다. 발언 영수증에 표시되는 일부 기록은 데모 데이터입니다."
-        : `Gemini의 발언 분류는 실제 AI 분석입니다. ${actualFactCheck?.message ?? "6단계 검증 결과와 공시 내용 비교는 아직 데모 데이터입니다."} 아래 데모 판정은 실제 OpenDART 검증 결과가 아닙니다.`
+        : isLiveVerificationUnavailable
+          ? `Gemini의 발언 분류는 실제 AI 분석입니다. ${unavailableMessage} 실제 OpenDART 판정 대신 데모 결과를 표시하지 않습니다.`
+          : undefined
       : undefined;
   const displayedStatement = analysisInput?.statement ?? statement.text;
   const displayedInfluencer = analysisInput?.influencerName ?? influencer.displayName;
   const displayedCompany =
     analysisInput?.structuredAnalysis?.stockName ??
     analysisInput?.structuredAnalysis?.company ??
-    factCheck.companyOrStockLabel;
+    (isLiveVerificationUnavailable ? "기업 식별 필요" : factCheck.companyOrStockLabel);
   const influencerProfileHref = resolveInfluencerProfileHref(
     analysisInput?.influencerName,
     influencer.slug,
@@ -153,9 +163,12 @@ export default async function FactCheckPage({ params, searchParams }: PageProps)
     analysisInput ? appendAnalysisInput(href, analysisInput) : href;
   const displayedVerificationStatus = liveVerification
     ? actualVerificationStatusMap[liveVerification.verificationStatus]
-    : factCheck.status;
+    : isLiveVerificationUnavailable
+      ? VERIFICATION_STATUS.CURRENTLY_UNVERIFIABLE
+      : factCheck.status;
   const verificationMeta = VERIFICATION_STATUS_META[displayedVerificationStatus];
-  const displayedSummary = liveVerification?.summary ?? factCheck.summary;
+  const displayedSummary = liveVerification?.summary ??
+    (isLiveVerificationUnavailable ? unavailableMessage : factCheck.summary);
   const displayedConfidence = liveVerification?.confidence ?? factCheck.confidence.score;
   const displayedCheckedAt = liveVerification?.verifiedAt ?? factCheck.checkedAt;
   const claimMeta = CLAIM_TYPE_META[statement.primaryType];
@@ -206,8 +219,14 @@ export default async function FactCheckPage({ params, searchParams }: PageProps)
             <StatusBadge tone={toneMap[verificationMeta.tone]} className="min-h-9 px-3 text-sm">
               {verificationMeta.label}
             </StatusBadge>
-            <StatusBadge tone={isLiveVerification ? "info" : "neutral"}>
-              {isLiveVerification ? "OpenDART 실제 공시 기반 검증" : "데모 팩트체크"}
+            <StatusBadge
+              tone={isLiveVerification ? "info" : isLiveVerificationUnavailable ? "warning" : "neutral"}
+            >
+              {isLiveVerification
+                ? "OpenDART 실제 공시 기반 검증"
+                : isLiveVerificationUnavailable
+                  ? "OpenDART 검증 미완료"
+                  : "데모 팩트체크"}
             </StatusBadge>
           </div>
         </div>
@@ -221,7 +240,9 @@ export default async function FactCheckPage({ params, searchParams }: PageProps)
             </span>
             <div>
               <p className="text-xs font-bold text-emerald-700">
-                {isLiveVerification ? "OpenDART 공식자료 검증" : "팩트체크 검증 결과"}
+                {isLiveVerification || isLiveVerificationUnavailable
+                  ? "OpenDART 공식자료 검증"
+                  : "팩트체크 검증 결과"}
               </p>
               <h2 id="verdict-title" className="mt-1 text-2xl font-black tracking-[-0.03em] text-ink">
                 {verificationMeta.label}
@@ -262,21 +283,25 @@ export default async function FactCheckPage({ params, searchParams }: PageProps)
           </div>
 
           <div className="mt-5 rounded-2xl bg-[#102f3e] p-5 text-white">
-            <p className="text-xs font-bold text-cyan-200">StockTrace 판단 요약</p>
+            <p className="text-xs font-bold text-cyan-200">
+              {isLiveVerificationUnavailable ? "OpenDART 검증 상태 안내" : "StockTrace 판단 요약"}
+            </p>
             <p className="mt-2 text-[15px] font-semibold leading-7">{displayedSummary}</p>
           </div>
 
-          <ConfidenceMeter
-            className="mt-5"
-            score={displayedConfidence}
-            level={liveVerification ? undefined : factCheck.confidence.level}
-            label={liveVerification ? "공시 근거 비교 신뢰수준" : undefined}
-            rationale={
-              liveVerification
-                ? "제공된 OpenDART 실제 공시 발췌문과 사용자 발언을 비교한 AI의 구조화 확신도입니다."
-                : factCheck.confidence.rationale
-            }
-          />
+          {!isLiveVerificationUnavailable ? (
+            <ConfidenceMeter
+              className="mt-5"
+              score={displayedConfidence}
+              level={liveVerification ? undefined : factCheck.confidence.level}
+              label={liveVerification ? "공시 근거 비교 신뢰수준" : undefined}
+              rationale={
+                liveVerification
+                  ? "제공된 OpenDART 실제 공시 발췌문과 사용자 발언을 비교한 AI의 구조화 확신도입니다."
+                  : factCheck.confidence.rationale
+              }
+            />
+          ) : null}
         </div>
       </section>
 
@@ -286,8 +311,8 @@ export default async function FactCheckPage({ params, searchParams }: PageProps)
         title={
           isLiveVerification
             ? "실제 검증과 데모 데이터 구분"
-            : analysisInput?.analysisMode === "ai"
-              ? "AI 분류와 데모 검증 구분"
+            : isLiveVerificationUnavailable
+              ? "OpenDART 검증 미완료"
               : "데모 데이터 안내"
         }
         description={dataSeparationDescription}
@@ -314,8 +339,15 @@ export default async function FactCheckPage({ params, searchParams }: PageProps)
                 <dd className="mt-1.5 text-sm font-extrabold leading-5 text-ink">{claimMeta.label}</dd>
               </div>
               <div className="rounded-xl border border-line p-4">
-                <dt className="flex items-center gap-2 text-xs font-semibold text-muted"><CalendarCheck2 aria-hidden="true" className="size-3.5" /> 검증일</dt>
-                <dd className="mt-1.5 text-sm font-extrabold text-ink">{formatKoreanDate(displayedCheckedAt)}</dd>
+                <dt className="flex items-center gap-2 text-xs font-semibold text-muted">
+                  <CalendarCheck2 aria-hidden="true" className="size-3.5" />
+                  {isLiveVerificationUnavailable ? "검증 상태" : "검증일"}
+                </dt>
+                <dd className="mt-1.5 text-sm font-extrabold text-ink">
+                  {isLiveVerificationUnavailable
+                    ? "검증 미완료"
+                    : formatKoreanDate(displayedCheckedAt)}
+                </dd>
               </div>
             </dl>
           </FactCheckDetail>
@@ -323,7 +355,9 @@ export default async function FactCheckPage({ params, searchParams }: PageProps)
           <FactCheckDetail
             title="근거자료"
             description={
-              displayedOpenDartResult
+              isLiveVerificationUnavailable
+                ? unavailableMessage
+                : displayedOpenDartResult
                 ? isLiveVerification
                   ? `OpenDART 실제 원문 비교 ${liveVerification.matchedFacts.length + liveVerification.conflictingFacts.length + liveVerification.unverifiedFacts.length}개 항목 · 실제 공시 ${liveVerification.sources.length}건`
                   : `OpenDART 공시 조회 · 데모 비교 ${factCheck.comparisons.length}개 항목 · 데모 자료 ${sources.length}건`
@@ -338,7 +372,7 @@ export default async function FactCheckPage({ params, searchParams }: PageProps)
 
             {liveVerification ? (
               <OpenDartVerificationDetails result={liveVerification} />
-            ) : (
+            ) : isLiveVerificationUnavailable ? null : (
               <>
             <section aria-labelledby="comparison-title">
               <div className="mb-4 flex flex-wrap items-end justify-between gap-2">
@@ -400,6 +434,7 @@ export default async function FactCheckPage({ params, searchParams }: PageProps)
         </div>
 
         <aside className="space-y-4 lg:sticky lg:top-24">
+          {!isLiveVerificationUnavailable ? (
           <div className="surface-card p-5">
             <div className="flex items-center gap-2">
               <FileCheck2 aria-hidden="true" className="size-4.5 text-brand" />
@@ -424,6 +459,7 @@ export default async function FactCheckPage({ params, searchParams }: PageProps)
               })}
             </div>
           </div>
+          ) : null}
 
           <div className="rounded-2xl border border-line bg-white p-5">
             <h2 className="text-sm font-black text-ink">이 기록의 다음 단계</h2>
