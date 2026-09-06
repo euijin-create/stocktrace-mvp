@@ -50,6 +50,21 @@ const GEMINI_FACT_CHECK_SCHEMA = removeUnsupportedMaxItems(
   OPEN_DART_VERIFICATION_JSON_SCHEMA,
 ) as Record<string, unknown>;
 
+const GEMINI_FACT_CHECK_RETRY_OPTIONS = {
+  retries: {
+    strategy: "attempt-count-backoff" as const,
+    maxRetries: 1,
+    retryConnectionErrors: true,
+    backoff: {
+      initialInterval: 1_000,
+      maxInterval: 1_000,
+      exponent: 1,
+      maxElapsedTime: 2_000,
+    },
+  },
+  retry_codes: ["408", "429", "5XX"],
+};
+
 export class GeminiOpenDartFactCheckProvider {
   private readonly client: GoogleGenAI;
 
@@ -64,27 +79,30 @@ export class GeminiOpenDartFactCheckProvider {
     statement: string,
     evidenceDocuments: VerificationEvidenceDocument[],
   ): Promise<Omit<OpenDartVerificationResult, "verifiedAt">> {
-    const interaction = await this.client.interactions.create({
-      model: this.model,
-      input: JSON.stringify({
-        statement,
-        evidence: evidenceDocuments.map((document) => ({
-          corpName: document.corpName,
-          excerpts: document.excerpts,
-          receiptDate: document.receiptDate,
-          receiptNumber: document.receiptNumber,
-          reportName: document.reportName,
-        })),
-      }),
-      system_instruction: FACT_CHECK_SYSTEM_PROMPT,
-      generation_config: { max_output_tokens: 4096 },
-      response_format: {
-        type: "text",
-        mime_type: "application/json",
-        schema: GEMINI_FACT_CHECK_SCHEMA,
+    const interaction = await this.client.interactions.create(
+      {
+        model: this.model,
+        input: JSON.stringify({
+          statement,
+          evidence: evidenceDocuments.map((document) => ({
+            corpName: document.corpName,
+            excerpts: document.excerpts,
+            receiptDate: document.receiptDate,
+            receiptNumber: document.receiptNumber,
+            reportName: document.reportName,
+          })),
+        }),
+        system_instruction: FACT_CHECK_SYSTEM_PROMPT,
+        generation_config: { max_output_tokens: 4096 },
+        response_format: {
+          type: "text",
+          mime_type: "application/json",
+          schema: GEMINI_FACT_CHECK_SCHEMA,
+        },
+        store: false,
       },
-      store: false,
-    });
+      GEMINI_FACT_CHECK_RETRY_OPTIONS,
+    );
 
     const responseText = interaction.output_text?.trim();
     if (!responseText) throw new Error("Gemini returned an empty fact-check response");

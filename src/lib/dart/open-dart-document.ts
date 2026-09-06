@@ -4,6 +4,8 @@ import { unzipSync } from "fflate";
 
 const DOCUMENT_ENDPOINT = "https://opendart.fss.or.kr/api/document.xml";
 const REQUEST_TIMEOUT_MS = 15_000;
+const RETRY_DELAY_MS = 750;
+const MAX_REQUEST_ATTEMPTS = 2;
 const DOCUMENT_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 const MAX_ARCHIVE_BYTES = 20 * 1024 * 1024;
 const MAX_TEXT_FILE_BYTES = 12 * 1024 * 1024;
@@ -275,7 +277,29 @@ function mapDocumentError(error: unknown): OpenDartDocumentResult {
   return { document: null, message, status };
 }
 
-async function downloadOpenDartDocument(
+function isTransientDocumentError(error: unknown): boolean {
+  if (!(error instanceof OpenDartDocumentError)) return false;
+  if (
+    error.code === "timeout" ||
+    error.code === "network_error" ||
+    error.code === "invalid_document_response" ||
+    error.code === "020" ||
+    error.code === "800"
+  ) {
+    return true;
+  }
+  return (
+    error.httpStatus === 408 ||
+    error.httpStatus === 429 ||
+    (error.httpStatus !== undefined && error.httpStatus >= 500 && error.httpStatus <= 599)
+  );
+}
+
+function waitBeforeRetry(): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, RETRY_DELAY_MS));
+}
+
+async function requestOpenDartDocument(
   apiKey: string,
   receiptNo: string,
 ): Promise<OpenDartDocumentResult> {
@@ -322,12 +346,40 @@ async function downloadOpenDartDocument(
     };
   } catch (error) {
     if (controller.signal.aborted) {
-      return mapDocumentError(new OpenDartDocumentError("timeout", "Request timed out"));
+      throw new OpenDartDocumentError("timeout", "Request timed out");
     }
-    return mapDocumentError(error);
+    if (error instanceof OpenDartDocumentError) throw error;
+    throw new OpenDartDocumentError(
+      "network_error",
+      error instanceof Error ? error.message : "OpenDART network request failed",
+    );
   } finally {
     clearTimeout(timeout);
   }
+}
+
+async function downloadOpenDartDocument(
+  apiKey: string,
+  receiptNo: string,
+): Promise<OpenDartDocumentResult> {
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= MAX_REQUEST_ATTEMPTS; attempt += 1) {
+    try {
+      return await requestOpenDartDocument(apiKey, receiptNo);
+    } catch (error) {
+      lastError = error;
+      if (attempt >= MAX_REQUEST_ATTEMPTS || !isTransientDocumentError(error)) {
+        return mapDocumentError(error);
+      }
+      console.warn("[StockTrace] Retrying transient OpenDART document request", {
+        attempt: attempt + 1,
+        code: error instanceof OpenDartDocumentError ? error.code : undefined,
+        httpStatus: error instanceof OpenDartDocumentError ? error.httpStatus : undefined,
+      });
+      await waitBeforeRetry();
+    }
+  }
+  return mapDocumentError(lastError);
 }
 
 export async function getOpenDartDocument(
