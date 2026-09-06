@@ -200,7 +200,7 @@ export function classifyStatementWithMock(statement: string): MockAnalysisResult
     return {
       kind: "opinion",
       claimType: CLAIM_TYPE.OPINION,
-      label: "개인적인 의견",
+      label: "개인 의견",
       description: "검증 가능한 사건이나 수치보다 작성자의 해석과 판단이 중심인 발언입니다.",
       conditionLabel: "팩트체크·예측 평가 대상 아님",
       detectedEntity,
@@ -215,7 +215,7 @@ export function classifyStatementWithMock(statement: string): MockAnalysisResult
     return {
       kind: "insufficient_prediction",
       claimType: CLAIM_TYPE.PRICE_PREDICTION,
-      label: "미래 주가 예측",
+      label: "미래 예측",
       description: "상승·하락에 대한 표현은 있지만 목표 수준이나 기간이 구체적이지 않아 객관적인 사후 평가가 어렵습니다.",
       conditionLabel: "평가조건 불충분",
       detectedEntity,
@@ -231,7 +231,7 @@ export function classifyStatementWithMock(statement: string): MockAnalysisResult
     return {
       kind: "prediction",
       claimType: CLAIM_TYPE.PRICE_PREDICTION,
-      label: "미래 주가 예측",
+      label: "미래 예측",
       description: "방향, 목표 수익률과 예측기간이 있어 사후 성과를 기록하고 평가할 수 있는 발언입니다.",
       conditionLabel: "평가조건 충족",
       detectedEntity,
@@ -247,7 +247,7 @@ export function classifyStatementWithMock(statement: string): MockAnalysisResult
   return {
     kind: "fact",
     claimType: CLAIM_TYPE.VERIFIABLE_FACT,
-    label: "공식자료로 확인 가능한 사실 주장",
+    label: "사실 주장",
     description: "기업명, 사건 또는 수치가 포함되어 있어 공식자료와 비교할 수 있는 발언입니다.",
     conditionLabel: "팩트체크 가능",
     detectedEntity,

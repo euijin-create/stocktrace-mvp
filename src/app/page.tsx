@@ -20,6 +20,8 @@ import { PredictionCard } from "@/components/prediction-card";
 import { QuickAnalyzeForm } from "@/components/quick-analyze-form";
 import { DemoNotice } from "@/components/ui/demo-notice";
 import { SectionHeading } from "@/components/ui/section-heading";
+import { showcaseExamples } from "@/data/showcase-examples";
+import { appendAnalysisInput } from "@/lib/mock-analysis";
 import type { StatusTone } from "@/components/ui/status-badge";
 import {
   VERIFICATION_STATUS_META,
@@ -58,12 +60,12 @@ export default function HomePage() {
                 주식 콘텐츠 검증의 새로운 기록 방식
               </span>
               <h1 className="mt-5 balance-text text-[2.35rem] font-black leading-[1.12] tracking-[-0.055em] sm:text-5xl sm:leading-[1.08] lg:text-[3.45rem]">
-                들은 말은 기록하고,
-                <br />결과까지 추적하세요
+                주식 발언은 기록하고,
+                <br />사실과 결과까지 추적하세요
               </h1>
               <p className="mt-5 max-w-2xl text-[15px] leading-7 text-slate-200 sm:text-base">
-                StockTrace는 주식 콘텐츠 속 사실 주장과 미래 예측을 구분해 공식자료와 비교하고,
-                시간이 지난 뒤 실제 결과까지 한 흐름으로 보여줍니다.
+                StockTrace는 주식 콘텐츠의 핵심 발언을 기록하고, 사실 주장은 공식자료로 검증하며,
+                미래 예측은 실제 주가와 시장지수로 사후평가합니다.
               </p>
               <QuickAnalyzeForm />
 
@@ -78,7 +80,7 @@ export default function HomePage() {
                 </span>
                 <span className="inline-flex items-center gap-1.5">
                   <CheckCircle2 aria-hidden="true" className="size-3.5 text-cyan-300" />
-                  모든 수치는 예시 데이터
+                  실제·예시 데이터 구분 표시
                 </span>
               </div>
             </div>
@@ -88,7 +90,7 @@ export default function HomePage() {
                 <div className="rounded-[1.2rem] bg-white p-5 text-ink">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-[11px] font-extrabold tracking-[0.12em] text-brand">TRACE #0241</p>
+                      <p className="text-[11px] font-extrabold tracking-[0.12em] text-brand">TRACE #0241 · 예시 화면</p>
                       <p className="mt-1 text-sm font-black">한 달 안에 20% 상승</p>
                     </div>
                     <span className="flex size-9 items-center justify-center rounded-xl bg-emerald-50 text-emerald-700">
@@ -100,7 +102,7 @@ export default function HomePage() {
                     {[
                       ["발언 기록", "50,000원 · 2025.03.10"],
                       ["평가조건 고정", "+20% · 1개월"],
-                      ["결과 확인", "+7% · KOSPI 대비 +4%p"],
+                      ["결과 확인", "평가일 +7% · KOSPI 대비 +4%p"],
                     ].map(([title, description], index) => (
                       <div key={title} className="relative">
                         <span
@@ -116,7 +118,7 @@ export default function HomePage() {
                   </div>
                   <div className="mt-6 grid grid-cols-2 gap-2 rounded-xl bg-slate-950 p-3.5 text-white">
                     <div>
-                      <p className="text-[10px] text-slate-400">목표가 도달</p>
+                      <p className="text-[10px] text-slate-400">기간 중 목표가 도달</p>
                       <p className="mt-1 text-sm font-extrabold">미도달</p>
                     </div>
                     <div>
@@ -148,6 +150,49 @@ export default function HomePage() {
               </div>
             </div>
           ))}
+        </div>
+      </section>
+
+      <section className="mx-auto max-w-[1180px] px-4 py-10 sm:px-6 sm:py-14 lg:px-8" aria-labelledby="showcase-title">
+        <SectionHeading
+          id="showcase-title"
+          eyebrow="TRY STOCKTRACE"
+          title="StockTrace 직접 체험하기"
+          description="대표 사례를 불러온 뒤 AI 분석 버튼을 눌러 실제 데이터 연결 흐름을 확인해 보세요."
+        />
+        <div className="mt-6 grid gap-4 md:grid-cols-2">
+          {showcaseExamples.map((example) => {
+            const ExampleIcon = example.kind === "fact-check" ? FileSearch : BarChart3;
+            return (
+              <article key={example.id} className="surface-card flex min-w-0 flex-col p-5 sm:p-6">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                  <span className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-[#e7f1f2] text-brand">
+                    <ExampleIcon aria-hidden="true" className="size-5" />
+                  </span>
+                  <span className="inline-flex w-fit max-w-full rounded-full bg-emerald-50 px-2.5 py-1.5 text-[11px] font-extrabold leading-4 text-emerald-800 ring-1 ring-inset ring-emerald-200">
+                    {example.badge}
+                  </span>
+                </div>
+                <h2 className="mt-5 text-xl font-black tracking-[-0.025em] text-ink">
+                  {example.title}
+                </h2>
+                <p className="mt-2 text-sm leading-6 text-muted">{example.description}</p>
+                <blockquote className="mt-4 rounded-2xl border-l-4 border-brand bg-slate-50 px-4 py-3.5 text-sm font-extrabold leading-6 text-ink">
+                  “{example.input.statement}”
+                </blockquote>
+                <p className="mt-3 text-xs leading-5 text-muted">{example.sourceNote}</p>
+                <Link
+                  href={appendAnalysisInput("/analyze", example.input)}
+                  prefetch={false}
+                  className="mt-5 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-ink px-4 text-sm font-extrabold text-white transition hover:bg-[#1c4053] sm:w-fit sm:min-w-44"
+                  style={{ color: "#ffffff" }}
+                >
+                  예시 불러오기
+                  <ArrowRight aria-hidden="true" className="size-4" />
+                </Link>
+              </article>
+            );
+          })}
         </div>
       </section>
 
@@ -195,7 +240,7 @@ export default function HomePage() {
           <SectionHeading
             eyebrow="RECENT FACT CHECKS"
             title="최근 팩트체크"
-            description="발언과 공식자료에서 확인된 범위를 나란히 살펴보세요."
+            description="아래 카드는 화면 구성용 예시입니다. 실제 분석 결과에서는 OpenDART 출처를 별도로 표시합니다."
             action={
               <Link href="/analyze" className="inline-flex min-h-11 items-center gap-1.5 rounded-xl px-3 text-sm font-extrabold text-action hover:bg-blue-50">
                 내 콘텐츠 분석하기 <ChevronRight aria-hidden="true" className="size-4" />
@@ -218,6 +263,7 @@ export default function HomePage() {
                   summary={view.factCheck.summary}
                   sourceName={view.sources[0]?.organization ?? "공식자료 확인 중"}
                   checkedDate={formatKoreanDate(view.factCheck.checkedAt)}
+                  dataLabel="예시 데이터"
                 />
               );
             })}
@@ -229,7 +275,7 @@ export default function HomePage() {
         <SectionHeading
           eyebrow="PREDICTION TRACKING"
           title="최근 평가가 완료된 예측"
-          description="목표 달성 여부와 실제 수익률, 같은 기간 시장 성과를 분리해 확인합니다."
+          description="아래 성과는 예시 데이터입니다. 실제 분석 결과에서는 실제 시장데이터 배지를 표시합니다."
           action={
             <Link href="/predictions" className="inline-flex min-h-11 items-center gap-1.5 rounded-xl px-3 text-sm font-extrabold text-action hover:bg-blue-50">
               전체 예측 보기 <ChevronRight aria-hidden="true" className="size-4" />
@@ -254,6 +300,7 @@ export default function HomePage() {
                   priceAtStatement: {
                     ...prediction.priceAtStatement,
                     capturedAt: formatKoreanDate(prediction.priceAtStatement.capturedAt),
+                    dataMode: "demo",
                   },
                   direction: prediction.direction,
                   targetReturnPct: prediction.targetReturnPct,
@@ -266,6 +313,7 @@ export default function HomePage() {
                     evaluation && evaluation.targetReached !== null
                       ? {
                           ...evaluation,
+                          dataMode: "demo",
                           evaluatedAt: formatKoreanDate(evaluation.evaluatedAt),
                           targetReached: evaluation.targetReached,
                         }
@@ -282,7 +330,7 @@ export default function HomePage() {
           <SectionHeading
             eyebrow="WATCHLIST"
             title="관심 인플루언서"
-            description="단일 신뢰점수 대신, 표본과 항목별 관찰 결과를 확인합니다."
+            description="화면 구성용 예시 프로필에서 단일 점수가 아닌 항목별 기록 방식을 확인합니다."
           />
           <div className="mt-6 grid gap-4 md:grid-cols-3">
             {featuredInfluencers.map(({ influencer, profile }) => (
@@ -331,14 +379,17 @@ export default function HomePage() {
 
       <section className="mx-auto max-w-[1180px] px-4 py-11 sm:px-6 sm:py-14 lg:px-8">
         <div className="grid gap-5 lg:grid-cols-[1fr_auto] lg:items-center">
-          <DemoNotice />
+          <DemoNotice
+            title="데이터 출처 안내"
+            description="실제 AI·OpenDART·시장데이터가 연결된 결과는 출처 배지로 표시하며, 예시 데이터는 별도로 구분합니다."
+          />
           <Link
             href="/analyze"
             className="inline-flex min-h-13 items-center justify-center gap-2 rounded-xl bg-ink px-6 text-sm font-extrabold text-white transition hover:bg-[#1c4053]"
             style={{ color: "#ffffff" }}
           >
             <DatabaseZap aria-hidden="true" className="size-4.5" />
-            데모 분석 시작하기
+            콘텐츠 분석 시작하기
             <ArrowRight aria-hidden="true" className="size-4" />
           </Link>
         </div>

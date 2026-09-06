@@ -65,7 +65,7 @@ function getBaseView(statement: StockStatementAnalysis, mode: AnalysisMode): Ana
       return {
         kind: "fact",
         claimType: CLAIM_TYPE.VERIFIABLE_FACT,
-        label: "공식자료로 확인 가능한 사실 주장",
+        label: "사실 주장",
         description: `${statement.summary}. 실제 사실 여부는 아직 판단하지 않았으며 공식자료 확인이 필요합니다.`,
         conditionLabel: "팩트체크 대상",
         detectedEntity,
@@ -80,7 +80,7 @@ function getBaseView(statement: StockStatementAnalysis, mode: AnalysisMode): Ana
       return {
         kind: evaluable ? "prediction" : "insufficient_prediction",
         claimType: CLAIM_TYPE.PRICE_PREDICTION,
-        label: "미래 주가 예측",
+        label: "미래 예측",
         description: evaluable
           ? `${statement.summary}. 추출된 조건으로 향후 결과를 추적할 수 있습니다.`
           : `${statement.summary}. ${statement.evaluationMissingReason ?? "객관적인 평가 조건을 추가로 확인해야 합니다."}`,
@@ -107,7 +107,7 @@ function getBaseView(statement: StockStatementAnalysis, mode: AnalysisMode): Ana
       return {
         kind: "opinion",
         claimType: CLAIM_TYPE.OPINION,
-        label: "개인적인 의견",
+        label: "개인 의견",
         description: "개인적인 의견으로 분류되었습니다. 공식자료를 이용한 사실 검증 대상은 아닙니다.",
         conditionLabel: "팩트체크·예측 평가 대상 아님",
         detectedEntity,
@@ -121,7 +121,7 @@ function getBaseView(statement: StockStatementAnalysis, mode: AnalysisMode): Ana
       return {
         kind: "context_risk",
         claimType: CLAIM_TYPE.CONTEXT_RISK,
-        label: "과장 또는 맥락 누락 가능 표현",
+        label: "과장·맥락 확인 필요",
         description: `${statement.summary}. 핵심 조건과 전후 맥락을 추가로 확인해 주세요.`,
         conditionLabel: "추가 맥락 확인 필요",
         detectedEntity,
@@ -135,7 +135,7 @@ function getBaseView(statement: StockStatementAnalysis, mode: AnalysisMode): Ana
       return {
         kind: "conflict",
         claimType: CLAIM_TYPE.CONFLICT_DISCLOSURE,
-        label: "광고 또는 이해관계 관련 표현",
+        label: "광고·이해관계 관련 표현",
         description: `${statement.summary}. 관련 표현의 존재만 표시하며 실제 이해관계가 존재한다고 단정하지 않습니다.`,
         conditionLabel: "공개 표현 객관적 기록",
         detectedEntity,

@@ -48,7 +48,7 @@ export default function AnalyzePage() {
         </div>
         <span className="inline-flex w-fit items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-800">
           <ShieldCheck aria-hidden="true" className="size-4" />
-          {initialMode === "ai" ? "발언 텍스트만 AI 분석" : "데모 분석 모드"}
+          {initialMode === "ai" ? "Gemini 실제 AI 분석 · 발언 텍스트만 전송" : "데모 분석 모드"}
         </span>
       </div>
 

@@ -19,7 +19,7 @@ import {
 
 export const metadata: Metadata = {
   title: "예측 추적",
-  description: "발언 당시 조건과 이후 실제 수익률, 시장 대비 성과를 함께 추적합니다.",
+  description: "발언일의 조건과 이후 실제 수익률, 시장 대비 성과를 함께 추적합니다.",
 };
 
 type PageProps = {
@@ -54,7 +54,7 @@ export default async function PredictionsPage({ searchParams }: PageProps) {
       <div className="mb-7 mt-5">
         <p className="text-sm font-extrabold text-brand">PREDICTION TRACKER</p>
         <h1 className="mt-2 balance-text text-3xl font-black tracking-[-0.04em] text-ink sm:text-4xl">예측은 조건과 결과를 함께 봅니다</h1>
-        <p className="mt-3 max-w-3xl text-sm leading-6 text-muted sm:text-base sm:leading-7">발언 당시의 가격·방향·목표·기간을 고정하고 평가일의 실제 성과를 같은 기간 시장지수와 비교합니다.</p>
+        <p className="mt-3 max-w-3xl text-sm leading-6 text-muted sm:text-base sm:leading-7">발언일 기준 종가·방향·목표·기간을 고정하고 평가일의 실제 성과를 같은 기간 시장지수와 비교합니다.</p>
       </div>
 
       <div className="mb-6 grid gap-3 sm:grid-cols-3">
@@ -82,11 +82,18 @@ export default async function PredictionsPage({ searchParams }: PageProps) {
               : "시장데이터 조회 안내"}
           description={
             marketDataResult.assessment.status === "completed"
-              ? "선택한 예측은 실제 일별 주가와 기준지수로 사후평가했습니다. 나머지 기존 예시 카드의 성과값은 데모 데이터입니다."
+              ? "선택한 예측은 실제 일별 주가와 기준지수로 사후평가했습니다. 표시된 평가값은 실제 시장데이터 기반입니다."
               : marketDataResult.ok
                 ? "선택한 예측의 발언일 종가와 기준지수는 실제 시장데이터입니다. 미래 예측은 평가 예정일까지 추적 중으로 유지합니다."
-              : "선택한 예측은 실제 주가를 확인하지 못했으며 다른 종목의 데모 가격으로 대체하지 않습니다. 기존 목록의 예시 카드는 데모 데이터입니다."
+              : "선택한 예측은 실제 주가를 확인하지 못했으며 다른 종목의 데모 가격으로 대체하지 않습니다."
           }
+        />
+      ) : structuredPrediction ? (
+        <DemoNotice
+          compact
+          className="mb-6"
+          title="분석 결과 표시 안내"
+          description="현재 분석에서 생성된 예측만 표시합니다. 실제 주가를 확인하지 못한 값은 데모 가격으로 대체하지 않습니다."
         />
       ) : (
         <DemoNotice compact className="mb-6" />
@@ -112,7 +119,11 @@ export default async function PredictionsPage({ searchParams }: PageProps) {
           </span>
           <div>
             <h2 id="method-title" className="text-base font-black text-ink">평가 방식</h2>
-            <p className="mt-2 text-sm leading-6 text-muted">실제 입력 평가는 발언일과 평가일의 종가, 기간 중 고가·저가 및 같은 시장의 기준지수를 사용합니다. 배당·세금·거래비용은 반영하지 않으며, 기존 예시 카드의 성과값은 데모 데이터입니다.</p>
+            <p className="mt-2 text-sm leading-6 text-muted">
+              {structuredPrediction
+                ? "현재 분석 결과는 발언일과 평가일의 종가, 기간 중 고가·저가 및 같은 시장의 기준지수를 사용합니다. 배당·세금·거래비용은 반영하지 않습니다."
+                : "실제 입력 평가는 발언일과 평가일의 종가, 기간 중 고가·저가 및 같은 시장의 기준지수를 사용합니다. 배당·세금·거래비용은 반영하지 않으며, 현재 예시 카드의 성과값은 데모 데이터입니다."}
+            </p>
           </div>
         </div>
       </section>

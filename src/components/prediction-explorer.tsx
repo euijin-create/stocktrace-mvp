@@ -107,6 +107,11 @@ export function PredictionExplorer({
   const focusedOverrides = focusedView
     ? getPredictionAnalysisOverrides(analysisInput)
     : null;
+  const displayedViews =
+    focusedView &&
+    analysisInput?.structuredAnalysis?.statementType === "prediction"
+      ? [focusedView]
+      : views;
   const focusedEffectiveStatus = focusedView
     ? resolveEffectiveStatus(
         focusedView.prediction.status,
@@ -130,7 +135,7 @@ export function PredictionExplorer({
   const statusForPrediction = (id: string, status: PredictionStatus) =>
     id === focusId && focusedEffectiveStatus ? focusedEffectiveStatus : status;
 
-  const filtered = views.filter(({ prediction }) => {
+  const filtered = displayedViews.filter(({ prediction }) => {
     const status = statusForPrediction(prediction.id, prediction.status);
     if (filter === "all") return true;
     if (filter === "active") return status === "tracking";
@@ -154,7 +159,7 @@ export function PredictionExplorer({
           <AnalysisInputSummary input={analysisInput} />
           {analysisInput.structuredAnalysis && (
             <p className="mt-2 rounded-xl border border-blue-100 bg-blue-50/70 px-3.5 py-2.5 text-xs font-semibold leading-5 text-blue-900">
-              {analysisInput.analysisMode === "ai" ? "AI 실제 분석" : "데모 분석"}에서 추출한 예측 조건을 카드에 반영했습니다. {marketDataResult?.assessment.status === "completed"
+              {analysisInput.analysisMode === "ai" ? "Gemini 실제 AI 분석" : "데모 분석"}에서 추출한 예측 조건을 카드에 반영했습니다. {marketDataResult?.assessment.status === "completed"
                 ? "실제 시장데이터로 사후평가를 완료했습니다."
                 : marketDataResult?.ok && marketDataResult.assessment.status === "tracking"
                   ? "발언일 종가와 기준지수는 실제 시장데이터이며, 미래 가격은 미리 평가하지 않습니다."
@@ -169,7 +174,7 @@ export function PredictionExplorer({
         {filters.map((item) => {
           const active = filter === item.id;
           const Icon = item.icon;
-          const count = views.filter(({ prediction }) => {
+          const count = displayedViews.filter(({ prediction }) => {
             const status = statusForPrediction(prediction.id, prediction.status);
             if (item.id === "all") return true;
             if (item.id === "active") return status === "tracking";

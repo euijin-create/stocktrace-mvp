@@ -13,6 +13,7 @@ export interface FactCheckCardProps {
   sourceName: string;
   checkedDate: string;
   compact?: boolean;
+  dataLabel?: string;
   variant?: "default" | "home";
 }
 
@@ -27,6 +28,7 @@ export function FactCheckCard({
   sourceName,
   checkedDate,
   compact = false,
+  dataLabel,
   variant = "default",
 }: FactCheckCardProps) {
   const isHomeSummary = variant === "home";
@@ -54,8 +56,9 @@ export function FactCheckCard({
       {!isHomeSummary && <p className="mt-2 text-xs font-semibold text-muted">{influencer}</p>}
 
       {isHomeSummary ? (
-        <div className="mt-4">
+        <div className="mt-4 flex flex-wrap items-center gap-2">
           <StatusBadge tone={statusTone}>{statusLabel}</StatusBadge>
+          {dataLabel ? <StatusBadge tone="neutral">{dataLabel}</StatusBadge> : null}
         </div>
       ) : (
         <div className="mt-4 flex items-center gap-2 text-xs text-slate-600">

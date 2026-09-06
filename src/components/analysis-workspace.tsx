@@ -370,7 +370,7 @@ export function AnalysisWorkspace({ initialMode }: { initialMode: AnalysisMode }
                 </span>
                 <div>
                   <p className="text-xs font-bold text-emerald-700">
-                    {analysisMode === "ai" ? "AI 분석 완료" : "데모 분석 완료"}
+                    {analysisMode === "ai" ? "Gemini 분석 완료" : "데모 분석 완료"}
                   </p>
                   <h2 id="multi-result-title" className="mt-0.5 text-xl font-black tracking-[-0.02em] text-ink">
                     추출된 핵심 발언 {results.length}개
@@ -379,7 +379,7 @@ export function AnalysisWorkspace({ initialMode }: { initialMode: AnalysisMode }
               </div>
               <span className="inline-flex w-fit items-center gap-1.5 rounded-full border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-bold text-blue-700">
                 <Sparkles aria-hidden="true" className="size-3.5" />
-                {analysisMode === "ai" ? "AI 실제 분석" : "데모 분석 모드"}
+                {analysisMode === "ai" ? "Gemini 실제 AI 분석" : "데모 분석 모드"}
               </span>
             </div>
 
@@ -533,7 +533,7 @@ export function AnalysisWorkspace({ initialMode }: { initialMode: AnalysisMode }
                 </span>
                 <div>
                   <p className="text-xs font-bold text-emerald-700">
-                    {analysisMode === "ai" ? "AI 분석 완료" : "데모 분석 완료"}
+                    {analysisMode === "ai" ? "Gemini 분석 완료" : "데모 분석 완료"}
                   </p>
                   <h2 id="result-title" className="mt-0.5 text-xl font-black tracking-[-0.02em] text-ink">
                     발언의 기록 경로를 찾았습니다
@@ -543,7 +543,7 @@ export function AnalysisWorkspace({ initialMode }: { initialMode: AnalysisMode }
               <span className="inline-flex w-fit items-center gap-1.5 rounded-full border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-bold text-blue-700">
                 <Sparkles aria-hidden="true" className="size-3.5" />
                 {result.confidence === undefined
-                  ? "AI 실제 분석"
+                  ? "Gemini 실제 AI 분석"
                   : `데모 분류 신뢰수준 ${result.confidence}%`}
               </span>
             </div>
@@ -621,7 +621,7 @@ export function AnalysisWorkspace({ initialMode }: { initialMode: AnalysisMode }
               </div>
 
               <p className="mt-4 text-xs leading-5 text-muted">
-                발언 분석은 위 모드로 처리하며, 공식자료와 시장데이터는 연결된 결과 화면에서 별도로 조회합니다. 사후 평가는 데모 데이터로 구분합니다.
+                공식자료 검증과 시장데이터 평가는 연결된 결과 화면에서 별도로 조회하며, 데모 데이터가 사용되는 경우 따로 표시합니다.
               </p>
             </div>
           </section>

@@ -122,7 +122,7 @@ export function PredictionMarketData({
                   value={result.evaluation.dueDate ?? "예측 기간을 계산할 수 없음"}
                 />
                 <PlainMetric
-                  label="평가일 데이터 기반"
+                  label="평가 가격 기준일 · 평가일 종가"
                   value={
                     assessment.status === "completed"
                       ? `${assessment.evaluationPrice.date} 종가 ${formatWon(assessment.evaluationPrice.close)}`
@@ -138,7 +138,7 @@ export function PredictionMarketData({
 
         <p className="mt-3 text-[11px] leading-5 text-muted">
           {result.provider.note}입니다. {assessment.status === "completed"
-            ? "평가기간의 실제 일별 데이터로 수익률과 목표 도달 여부를 계산했습니다."
+            ? "평가기간의 실제 일별 데이터로 수익률과 기간 중 목표가 도달 여부를 계산했습니다."
             : assessment.status === "tracking"
               ? "미래 가격을 미리 조회하거나 성공·실패를 판정하지 않습니다."
               : assessment.message}

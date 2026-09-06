@@ -94,11 +94,11 @@ const STATUS_META: Record<
 };
 
 const CLAIM_TYPE_LABELS: Record<string, string> = {
-  verifiable_fact: "공식자료 확인 가능 사실 주장",
-  context_risk: "과장 또는 맥락 누락 가능 표현",
-  price_prediction: "미래 주가 예측",
-  opinion: "개인적 의견",
-  conflict_disclosure: "이해관계 관련 표현",
+  verifiable_fact: "사실 주장",
+  context_risk: "과장·맥락 확인 필요",
+  price_prediction: "미래 예측",
+  opinion: "개인 의견",
+  conflict_disclosure: "광고·이해관계 관련 표현",
 };
 
 const HISTORY_STATUS_LABELS: Record<ReceiptHistoryType, string> = {
@@ -197,7 +197,7 @@ export function ReceiptCard({ receipt, className = "" }: ReceiptCardProps) {
         <ReceiptMeta label="게시 날짜" value={snapshot.publishedAt ?? "미확인"} />
         <ReceiptMeta label="StockTrace 기록일" value={receipt.recordedAt} />
         <ReceiptMeta
-          label="발언 당시 주가"
+          label="발언일 기준 종가"
           value={
             snapshot.priceAtStatement
               ? formatMoney(snapshot.priceAtStatement.price)

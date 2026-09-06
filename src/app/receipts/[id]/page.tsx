@@ -96,7 +96,7 @@ export default async function ReceiptPage({ params, searchParams }: PageProps) {
         <div>
           <p className="text-sm font-extrabold text-brand">STATEMENT RECEIPT</p>
           <h1 className="mt-2 balance-text text-3xl font-black tracking-[-0.04em] text-ink sm:text-4xl">발언 당시의 정보를 한 장에</h1>
-          <p className="mt-3 max-w-2xl text-sm leading-6 text-muted sm:text-base">원문, 게시 시점, 종목과 당시 주가를 기록해 이후의 검증·평가와 연결합니다.</p>
+          <p className="mt-3 max-w-2xl text-sm leading-6 text-muted sm:text-base">원문, 게시 시점, 종목과 발언일 기준 종가를 기록해 이후의 검증·평가와 연결합니다.</p>
         </div>
         <Link prefetch={false} href={preserveAnalysisInput(factCheck ? `/fact-checks/${factCheck.id}` : "/analyze")} className="inline-flex min-h-11 w-fit items-center gap-2 rounded-xl border border-line bg-white px-4 text-sm font-extrabold text-ink hover:bg-slate-50">
           <ArrowLeft aria-hidden="true" className="size-4" />

@@ -287,6 +287,13 @@ export function PredictionCard({
         </div>
       )}
 
+      {isSummaryCard &&
+      prediction.priceAtStatement.dataMode === "demo" ? (
+        <p className="mt-4 inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-extrabold text-slate-700 ring-1 ring-inset ring-slate-200">
+          <CircleDot aria-hidden="true" className="size-3.5" /> 데모 예측 · 예시 성과
+        </p>
+      ) : null}
+
       {evaluation?.dataMode === "actual" ? (
         <p className="mt-4 inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-extrabold text-emerald-800 ring-1 ring-inset ring-emerald-200">
           <CheckCircle2 aria-hidden="true" className="size-3.5" /> 실제 시장데이터 기반 평가
@@ -296,7 +303,7 @@ export function PredictionCard({
       {evaluation && isSummaryCard ? (
         <section className="mt-4 rounded-2xl border border-slate-200 bg-slate-950 p-4 text-white" aria-label="예측 핵심 결과">
           <dl className={`grid grid-cols-2 gap-x-3 gap-y-4 ${isHomeSummary ? "sm:grid-cols-2" : "sm:grid-cols-3"}`}>
-            <ResultMetric label="실제 수익률" value={formatPct(evaluation.actualReturnPct)} />
+            <ResultMetric label="평가일 실제 수익률" value={formatPct(evaluation.actualReturnPct)} />
             {!isHomeSummary && (
               <ResultMetric
                 label="시장 대비 성과"
@@ -304,7 +311,7 @@ export function PredictionCard({
               />
             )}
             <ResultMetric
-              label="목표 도달 여부"
+              label="기간 중 목표가 도달"
               value={
                 evaluation.targetReached === null
                   ? "평가 제외"
@@ -335,7 +342,7 @@ export function PredictionCard({
           </div>
 
           <dl className="mt-4 grid grid-cols-2 gap-x-3 gap-y-4 sm:grid-cols-3">
-            <ResultMetric label="실제 수익률" value={formatPct(evaluation.actualReturnPct)} />
+            <ResultMetric label="평가일 실제 수익률" value={formatPct(evaluation.actualReturnPct)} />
             <ResultMetric
               label={`${evaluation.benchmarkName} 수익률`}
               value={formatPct(evaluation.benchmarkReturnPct)}
@@ -345,7 +352,7 @@ export function PredictionCard({
               value={formatPct(evaluation.excessReturnPct, true)}
             />
             <ResultMetric
-              label="목표가격 도달"
+              label="기간 중 목표가 도달"
               value={
                 evaluation.targetReached === null
                   ? "평가 제외"
@@ -364,10 +371,10 @@ export function PredictionCard({
               }
             />
             <ResultMetric
-              label="최대하락률"
+              label="최대하락률(MDD)"
               value={formatPct(evaluation.maxDrawdownPct)}
             />
-            <ResultMetric label="종가" value={formatMoney(evaluation.endPrice)} />
+            <ResultMetric label="평가일 종가" value={formatMoney(evaluation.endPrice)} />
           </dl>
 
           <div className="mt-4 border-t border-white/10 pt-4">

@@ -329,7 +329,7 @@ export default async function PredictionDetailPage({ params, searchParams }: Pag
           <dl className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <OverviewMetric label="예측 목표" value={targetSummary} detail={targetDetail || "목표 조건 확인 필요"} />
             <OverviewMetric
-              label="실제 결과"
+              label="평가일 실제 수익률"
               value={evaluation ? formatPercent(evaluation.actualReturnPct) : unevaluatedResultLabel}
               detail={evaluation ? `${formatKoreanDate(evaluation.evaluatedAt)} 기준` : statusMeta.description}
             />
@@ -338,7 +338,7 @@ export default async function PredictionDetailPage({ params, searchParams }: Pag
               value={evaluation ? formatPercentPoint(evaluation.excessReturnPct) : unevaluatedResultLabel}
               detail={evaluation ? `${evaluation.benchmarkName} ${formatPercent(evaluation.benchmarkReturnPct)}` : statusMeta.description}
             />
-            <OverviewMetric label="목표 도달 여부" value={targetReachedLabel} detail={statusMeta.label} />
+            <OverviewMetric label="기간 중 목표가 도달" value={targetReachedLabel} detail={statusMeta.label} />
           </dl>
 
           <div className="mt-5 rounded-2xl bg-[#102f3e] p-5 text-white">
@@ -388,7 +388,7 @@ export default async function PredictionDetailPage({ params, searchParams }: Pag
         <summary className="flex min-h-18 cursor-pointer list-none items-center justify-between gap-4 px-5 py-4 sm:px-6">
           <span>
             <span className="block text-sm font-black text-ink">상세 평가</span>
-            <span className="mt-1 block text-xs leading-5 text-muted">가격 범위, 최대하락률과 시장 대비 계산 방식을 확인합니다.</span>
+            <span className="mt-1 block text-xs leading-5 text-muted">가격 범위, 최대하락률(MDD)과 시장 대비 계산 방식을 확인합니다.</span>
           </span>
           <ChevronDown aria-hidden="true" className="size-5 shrink-0 text-slate-400 transition group-open:rotate-180" />
         </summary>
@@ -406,7 +406,7 @@ export default async function PredictionDetailPage({ params, searchParams }: Pag
                 <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-[#e8f2f2] text-brand"><LineChart aria-hidden="true" className="size-5" /></span>
                 <div>
                   <h3 className="text-base font-black text-ink">평가기간 가격 범위</h3>
-                  <p className="mt-1 text-xs leading-5 text-muted">발언일 가격·기간 내 저가와 고가·평가일 종가를 함께 표시합니다.</p>
+                  <p className="mt-1 text-xs leading-5 text-muted">발언일 기준 종가·기간 내 저가와 고가·평가일 종가를 함께 표시합니다.</p>
                 </div>
               </div>
 
@@ -442,12 +442,12 @@ export default async function PredictionDetailPage({ params, searchParams }: Pag
               </div>
               <div className="mt-5 flex items-center justify-between gap-2 rounded-2xl bg-slate-950 px-4 py-5 text-center text-white">
                 <div>
-                  <p className="text-[10px] text-slate-400">실제</p>
+                    <p className="text-[10px] text-slate-400">종목 수익률</p>
                   <p className="number-tabular mt-1 font-black">{formatPercent(evaluation.actualReturnPct)}</p>
                 </div>
                 <span className="font-bold text-slate-500">−</span>
                 <div>
-                  <p className="text-[10px] text-slate-400">{evaluation.benchmarkName}</p>
+                  <p className="text-[10px] text-slate-400">시장 수익률 ({evaluation.benchmarkName})</p>
                   <p className="number-tabular mt-1 font-black">{formatPercent(evaluation.benchmarkReturnPct)}</p>
                 </div>
                 <span className="font-bold text-slate-500">=</span>
@@ -474,7 +474,7 @@ export default async function PredictionDetailPage({ params, searchParams }: Pag
 
           <div className="mt-5 grid gap-3 sm:grid-cols-3">
             <ResultNote icon={CalendarDays} title="평가 예정일" value={displayedEvaluationDueAt ?? "날짜 정보 없음"} description="발언일과 예측기간으로 계산" />
-            <ResultNote icon={CalendarDays} title="실제 평가 가격 기준일" value={formatKoreanDate(evaluation.evaluatedAt)} description="평가 예정일 이전 가장 가까운 거래일" />
+            <ResultNote icon={CalendarDays} title="평가 가격 기준일" value={formatKoreanDate(evaluation.evaluatedAt)} description="평가 예정일 이전 가장 가까운 거래일" />
             {evaluation.observedHighPrice ? (
               <ResultNote icon={LineChart} title="기간 최고가" value={formatEvaluationMoney(evaluation.observedHighPrice)} description="평가기간 일별 고가 중 최고" />
             ) : null}

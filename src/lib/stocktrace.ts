@@ -47,31 +47,31 @@ export const AI_CONFIDENCE_DISCLAIMER =
 
 export const CLAIM_TYPE_META: Record<ClaimType, DisplayMeta> = {
   [CLAIM_TYPE.VERIFIABLE_FACT]: {
-    label: "공식자료로 확인 가능한 사실 주장",
+    label: "사실 주장",
     description: "공시나 기관 자료에서 객관적으로 비교할 수 있는 내용입니다.",
     tone: "information",
     iconHint: "file-check",
   },
   [CLAIM_TYPE.CONTEXT_RISK]: {
-    label: "과장 또는 맥락 누락 가능 표현",
+    label: "과장·맥락 확인 필요",
     description: "수치의 기준, 범위 또는 전제가 함께 제시되었는지 확인이 필요합니다.",
     tone: "caution",
     iconHint: "message-square-warning",
   },
   [CLAIM_TYPE.PRICE_PREDICTION]: {
-    label: "미래 주가 예측",
+    label: "미래 예측",
     description: "방향, 목표와 기간을 기록해 평가일 이후 결과와 비교합니다.",
     tone: "information",
     iconHint: "chart-no-axes-combined",
   },
   [CLAIM_TYPE.OPINION]: {
-    label: "개인적인 의견",
+    label: "개인 의견",
     description: "검증 가능한 사실보다 해석이나 관점이 중심인 표현입니다.",
     tone: "neutral",
     iconHint: "message-circle",
   },
   [CLAIM_TYPE.CONFLICT_DISCLOSURE]: {
-    label: "광고·보유 등 이해관계 표현",
+    label: "광고·이해관계 관련 표현",
     description: "광고, 협찬 또는 종목 보유 여부와 관련된 표현입니다.",
     tone: "caution",
     iconHint: "badge-info",
@@ -653,7 +653,9 @@ export function getTargetReachedLabel(prediction: Prediction): string {
   if (!prediction.evaluation || prediction.evaluation.targetReached === null) {
     return "아직 평가하지 않음";
   }
-  return prediction.evaluation.targetReached ? "목표가격 도달" : "목표가격 미도달";
+  return prediction.evaluation.targetReached
+    ? "기간 중 목표가 달성"
+    : "기간 중 목표가 미달성";
 }
 
 function duplicateIds<T extends { id: string }>(items: T[]): string[] {

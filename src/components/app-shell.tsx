@@ -83,7 +83,7 @@ export function AppShell({ children }: AppShellProps) {
 
           <span className="inline-flex min-h-8 items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 px-2.5 text-[0.7rem] font-bold text-slate-600 sm:px-3 sm:text-xs">
             <FlaskConical aria-hidden="true" className="size-3.5 text-action" />
-            MVP 데모
+            MVP
           </span>
         </div>
       </header>
@@ -98,9 +98,10 @@ export function AppShell({ children }: AppShellProps) {
             <Brand compact />
             <p className="mt-3">주식 콘텐츠의 발언과 이후 결과를 객관적으로 기록합니다.</p>
           </div>
-          <p className="max-w-xl text-right">
-            현재 서비스의 분석과 수치는 예시 데이터입니다. StockTrace는 특정 종목의 매수·매도를
-            추천하거나 인플루언서의 위법 여부를 판정하지 않습니다.
+          <p className="max-w-2xl text-right">
+            StockTrace는 Gemini, OpenDART 및 시장데이터를 활용해 공개 발언을 분석합니다. 데모 데이터가
+            사용되는 영역은 별도로 표시됩니다. 특정 종목의 매수·매도를 추천하지 않으며,
+            불공정거래나 위법 여부를 판단하지 않습니다.
           </p>
         </div>
       </footer>

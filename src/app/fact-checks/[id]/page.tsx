@@ -136,7 +136,7 @@ export default async function FactCheckPage({ params, searchParams }: PageProps)
   const dataSeparationDescription =
     analysisInput?.analysisMode === "ai"
       ? isLiveVerification
-        ? "Gemini의 발언 분류와 OpenDART 공시 원문 기반 비교는 실제 분석입니다. 주가·수익률·사후평가와 발언 영수증의 일부 값은 아직 데모 데이터입니다."
+        ? "Gemini의 발언 분류와 OpenDART 공시 원문 기반 비교는 실제 분석입니다. 발언 영수증에 표시되는 일부 기록은 데모 데이터입니다."
         : `Gemini의 발언 분류는 실제 AI 분석입니다. ${actualFactCheck?.message ?? "6단계 검증 결과와 공시 내용 비교는 아직 데모 데이터입니다."} 아래 데모 판정은 실제 OpenDART 검증 결과가 아닙니다.`
       : undefined;
   const displayedStatement = analysisInput?.statement ?? statement.text;
